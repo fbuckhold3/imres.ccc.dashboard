@@ -371,209 +371,36 @@ ui <- page_fluid(
           )
         ),
         
-        # Coach ILP Summary
-        fluidRow(
-          column(
-            width = 6,
-            card(
-              card_header("Coach ILP Summary"),
-              card_body(
-                uiOutput("coach_ilp_summary")
-              )
-            )
+        # Concerns
+        radioButtons(
+          "ccc_concern",
+          "Are there any concerns about this resident?",
+          choices = c(
+            "No" = "0",
+            "Yes" = "1"
           ),
-          
-          # Secondary Review Summary
-          column(
-            width = 6,
-            card(
-              card_header("Secondary Review Summary"),
-              card_body(
-                # Review Type
-                radioButtons(
-                  "ccc_rev_type",
-                  "Review Type:",
-                  choices = c(
-                    "Scheduled Review" = "1",
-                    "Interim Review" = "2"
-                  ),
-                  selected = character(0)
-                ),
-                
-                # Session (for scheduled reviews)
-                conditionalPanel(
-                  condition = "input.ccc_rev_type == '1'",
-                  selectInput(
-                    "ccc_session",
-                    "Review Session:",
-                    choices = c(
-                      "Select session..." = "",
-                      "Mid Intern" = "1",
-                      "End Intern" = "2",
-                      "Mid PGY2" = "3",
-                      "End PGY2" = "4",
-                      "Mid PGY3" = "5",
-                      "Graduation" = "6",
-                      "Intern Intro" = "7"
-                    ),
-                    selected = ""
-                  )
-                ),
-                
-                # Concerns
-                radioButtons(
-                  "ccc_concern",
-                  "Are there any concerns about this resident?",
-                  choices = c(
-                    "No" = "0",
-                    "Yes" = "1"
-                  ),
-                  selected = character(0)
-                ),
-                
-                # Additional fields when concerns = Yes
-                conditionalPanel(
-                  condition = "input.ccc_concern == '1'",
-                  div(
-                    class = "alert alert-warning",
-                    tags$p(
-                      tags$strong("Please describe the concerns:"),
-                      "Your comments will be reviewed by the CCC."
-                    ),
-                    textAreaInput(
-                      "ccc_concern_details", 
-                      label = NULL,
-                      rows = 4,
-                      width = "100%",
-                      placeholder = "Describe the specific concerns about this resident..."
-                    )
-                  )
-                ),
-                conditionalPanel(
-                  condition = "input.ccc_concern == '1'",
-                  div(
-                    class = "alert alert-warning",
-                    tags$p(
-                      tags$strong("Please describe the concerns:"),
-                      "Your comments will be reviewed by the CCC."
-                    ),
-                    textAreaInput(
-                      "ccc_concern_details", 
-                      label = NULL,
-                      rows = 4,
-                      width = "100%",
-                      placeholder = "Describe the specific concerns about this resident..."
-                    )
-                  ),
-                  
-                  # Actions suggested by CCC
-                  div(
-                    class = "form-group mt-3",
-                    tags$label("Actions suggested by CCC:", class = "form-label"),
-                    checkboxGroupInput(
-                      "ccc_action",
-                      label = NULL,
-                      choices = c(
-                        "Remediation plan" = "1",
-                        "Probation" = "2", 
-                        "Referral for professionalism" = "3",
-                        "Coach follow up" = "4",
-                        "Meet with PD and or CCC Chair" = "5",
-                        "Other (see notes)" = "6"
-                      ),
-                      selected = character(0)
-                    )
-                  ),
-                  
-                  # Competency areas of concern
-                  div(
-                    class = "form-group mt-3",
-                    tags$label("Which area(s) of competence, if any? (can select more than one):", class = "form-label"),
-                    checkboxGroupInput(
-                      "ccc_competency",
-                      label = NULL,
-                      choices = c(
-                        "Patient Care" = "1",
-                        "Medical Knowledge" = "2",
-                        "Systems-based Practice" = "3", 
-                        "Practice-based Learning and Improvement" = "4",
-                        "Professionalism" = "5",
-                        "Interpersonal Communication Skills" = "6",
-                        "Not a competence concern" = "7"
-                      ),
-                      selected = character(0)
-                    )
-                  )
-                ),
-                
-                # Milestone completion (for scheduled reviews)
-                conditionalPanel(
-                  condition = "input.ccc_rev_type == '1'",
-                  radioButtons(
-                    "ccc_mile",
-                    "Are the milestones complete and acceptable?",
-                    choices = c(
-                      "No" = "0",
-                      "Yes" = "1"
-                    ),
-                    selected = character(0)
-                  )
-                ),
-                
-                conditionalPanel(
-                  condition = "input.ccc_mile == '0'",
-                  div(
-                    class = "alert alert-warning mb-4",
-                    tags$p(
-                      tags$strong("Milestone concerns detected:"),
-                      "Please review and edit the milestone assessments below, then provide comments about your changes."
-                    ),
-                    textAreaInput(
-                      "ccc_mile_concerns", 
-                      label = "Comments about milestone changes:",
-                      rows = 3,
-                      width = "100%",
-                      placeholder = "Explain what milestone changes you made and why..."
-                    )
-                  ),
-                  
-                  # Deploy the milestone editing module
-                  div(
-                    class = "milestone-edit-section",
-                    card(
-                      card_header(
-                        div(
-                          class = "d-flex justify-content-between align-items-center",
-                          h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
-                          tags$small("Make corrections to the milestone ratings below", class = "text-muted")
-                        )
-                      ),
-                      card_body(
-                        # This will render the milestone module for editing
-                        uiOutput("ccc_milestone_module_ui")
-                      )
-                    )
-                  )
-                ),
-                
-                # Comments
-                textAreaInput(
-                  "ccc_comments",
-                  "Additional Comments:",
-                  rows = 5,
-                  placeholder = "Enter any additional comments about this resident's review..."
-                ),
-                
-                # Validation and submit
-                div(
-                  class = "text-center mt-3",
-                  uiOutput("ccc_submit_button")
-                )
-              )
+          selected = character(0)
+        ),
+        
+        # Keep only this one conditionalPanel for concerns
+        conditionalPanel(
+          condition = "input.ccc_concern == '1'",
+          div(
+            class = "alert alert-warning",
+            tags$p(
+              tags$strong("Please describe the concerns:"),
+              "Your comments will be reviewed by the CCC."
+            ),
+            textAreaInput(
+              "ccc_concern_details", 
+              label = NULL,
+              rows = 4,
+              width = "100%",
+              placeholder = "Describe the specific concerns about this resident..."
             )
           )
         )
       )
     )
-  ) # End of main-content div
-) # End of page_fluid
+  )
+)

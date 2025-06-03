@@ -1155,9 +1155,18 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
             div(
               class = "milestone-label",
               span(section$items[[milestone_key]]),
-              span(
-                class = paste("level-badge", get_level_class(current_score)),
-                get_level_name(current_score)
+              div(
+                span(
+                  class = paste("level-badge", get_level_class(current_score)),
+                  get_level_name(current_score)
+                ),
+                actionButton(
+                  ns(paste0("info_", milestone_key)),
+                  icon("info-circle"),
+                  class = "btn btn-sm btn-outline-info ms-2",
+                  title = "View milestone details",
+                  style = "padding: 2px 6px;"
+                )
               )
             ),
             div(

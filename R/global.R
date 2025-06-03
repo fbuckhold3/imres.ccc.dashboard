@@ -633,39 +633,23 @@ ensure_data_loaded <- function() {
 }
 
 setup_imres_resources <- function() {
-  # Set up resource paths for imres package images
-  tryCatch({
-    # Check if imres package is available
-    if (requireNamespace("imres", quietly = TRUE)) {
-      img_path <- system.file("www", package = "imres")
-      
-      if (dir.exists(img_path)) {
-        message("Found imres www directory at: ", img_path)
-        
-        # Use shiny namespace to call addResourcePath
-        shiny::addResourcePath("imres-images", img_path)
-        message("Successfully set up imres-images resource path")
-        
-        # Check if milestones subdirectory exists
-        milestone_path <- file.path(img_path, "milestones")
-        if (dir.exists(milestone_path)) {
-          milestone_files <- list.files(milestone_path, pattern = "\\.png$")
-          message("Found ", length(milestone_files), " milestone images")
-          if (length(milestone_files) > 0) {
-            message("Sample milestone images: ", paste(head(milestone_files, 3), collapse = ", "))
-          }
-        } else {
-          message("No milestones subdirectory found in imres package")
-        }
-      } else {
-        warning("Could not find imres www directory")
-      }
+  if (dir.exists(system.file("www", package = "imres"))) {
+    message("Found imres www directory at: ", system.file("www", package = "imres"))
+    
+    # Use shiny namespace to call addResourcePath
+    shiny::addResourcePath("imres", system.file("www", package = "imres"))
+    
+    # Check for milestones subdirectory  
+    milestones_path <- system.file("www", "milestones", package = "imres")
+    if (dir.exists(milestones_path)) {
+      message("Successfully set up imres-milestones resource path")
     } else {
-      warning("imres package not available")
+      message("Note: No milestones subdirectory found in imres package (expected at inst/www/milestones/)")
+      message("Milestone images will show placeholder content instead")
     }
-  }, error = function(e) {
-    warning("Error setting up imres resource path: ", e$message)
-  })
+  } else {
+    warning("Could not find imres www directory")
+  }
 }
 
 # Call this function when the app starts
