@@ -449,6 +449,62 @@ ui <- page_fluid(
                     )
                   )
                 ),
+                conditionalPanel(
+                  condition = "input.ccc_concern == '1'",
+                  div(
+                    class = "alert alert-warning",
+                    tags$p(
+                      tags$strong("Please describe the concerns:"),
+                      "Your comments will be reviewed by the CCC."
+                    ),
+                    textAreaInput(
+                      "ccc_concern_details", 
+                      label = NULL,
+                      rows = 4,
+                      width = "100%",
+                      placeholder = "Describe the specific concerns about this resident..."
+                    )
+                  ),
+                  
+                  # Actions suggested by CCC
+                  div(
+                    class = "form-group mt-3",
+                    tags$label("Actions suggested by CCC:", class = "form-label"),
+                    checkboxGroupInput(
+                      "ccc_action",
+                      label = NULL,
+                      choices = c(
+                        "Remediation plan" = "1",
+                        "Probation" = "2", 
+                        "Referral for professionalism" = "3",
+                        "Coach follow up" = "4",
+                        "Meet with PD and or CCC Chair" = "5",
+                        "Other (see notes)" = "6"
+                      ),
+                      selected = character(0)
+                    )
+                  ),
+                  
+                  # Competency areas of concern
+                  div(
+                    class = "form-group mt-3",
+                    tags$label("Which area(s) of competence, if any? (can select more than one):", class = "form-label"),
+                    checkboxGroupInput(
+                      "ccc_competency",
+                      label = NULL,
+                      choices = c(
+                        "Patient Care" = "1",
+                        "Medical Knowledge" = "2",
+                        "Systems-based Practice" = "3", 
+                        "Practice-based Learning and Improvement" = "4",
+                        "Professionalism" = "5",
+                        "Interpersonal Communication Skills" = "6",
+                        "Not a competence concern" = "7"
+                      ),
+                      selected = character(0)
+                    )
+                  )
+                ),
                 
                 # Milestone completion (for scheduled reviews)
                 conditionalPanel(

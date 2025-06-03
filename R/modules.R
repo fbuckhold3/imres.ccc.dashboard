@@ -1381,6 +1381,542 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
   })  # End of moduleServer
 } 
 
+
+mod_miles_rating_enhanced_ui <- function(id) {
+  ns <- NS(id)
+  
+  tagList(
+    # Add custom CSS for milestone interface
+    tags$head(
+      tags$style(HTML("
+        .milestone-section {
+          background: #f8f9fa;
+          border-radius: 10px;
+          padding: 20px;
+          margin-bottom: 20px;
+          border-left: 4px solid #007bff;
+        }
+        .milestone-section h4 {
+          color: #007bff;
+          margin-bottom: 15px;
+          font-weight: 600;
+        }
+        .milestone-item {
+          background: white;
+          border-radius: 6px;
+          padding: 12px;
+          margin-bottom: 12px;
+          border: 1px solid #dee2e6;
+          transition: all 0.2s ease;
+        }
+        .milestone-item:hover {
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+          transform: translateY(-1px);
+        }
+        .milestone-item.selected {
+          border-color: #007bff;
+          background: #f8f9ff;
+        }
+        .milestone-label {
+          font-weight: 500;
+          color: #495057;
+          margin-bottom: 8px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+        .milestone-controls {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .level-badge {
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 0.8em;
+          font-weight: 600;
+          min-width: 80px;
+          text-align: center;
+        }
+        .level-0 { background: #6c757d; color: white; }
+        .level-1-2 { background: #dc3545; color: white; }
+        .level-3-4 { background: #fd7e14; color: white; }
+        .level-5-6 { background: #ffc107; color: black; }
+        .level-7-8 { background: #20c997; color: white; }
+        .level-9 { background: #198754; color: white; }
+        .milestone-slider {
+          flex: 1;
+          margin: 0 10px;
+        }
+        .current-value {
+          font-size: 0.8em;
+          color: #6c757d;
+          font-style: italic;
+        }
+        .milestone-image-btn {
+          background: none;
+          border: none;
+          color: #007bff;
+          cursor: pointer;
+          padding: 2px 5px;
+          border-radius: 3px;
+          transition: all 0.2s ease;
+        }
+        .milestone-image-btn:hover {
+          background: #007bff;
+          color: white;
+        }
+        .selection-controls {
+          background: white;
+          border-radius: 8px;
+          padding: 15px;
+          margin-bottom: 20px;
+          border: 1px solid #dee2e6;
+        }
+        .progress-summary {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 10px;
+          padding: 20px;
+          margin-bottom: 20px;
+          text-align: center;
+        }
+      "))
+    ),
+    
+    # Progress summary
+    div(
+      class = "progress-summary",
+      h4("Milestone Assessment Progress", style = "margin-bottom: 10px;"),
+      textOutput(ns("progress_summary"))
+    ),
+    
+    # Selection controls
+    div(
+      class = "selection-controls",
+      div(
+        class = "row",
+        div(
+          class = "col-md-6",
+          tags$label("Quick Selection:", class = "form-label fw-bold"),
+          div(
+            class = "btn-group-sm d-flex flex-wrap gap-1",
+            actionButton(ns("select_all"), "Select All", class = "btn-outline-primary btn-sm"),
+            actionButton(ns("select_none"), "Select None", class = "btn-outline-secondary btn-sm"),
+            actionButton(ns("select_assessed"), "Select Assessed Only", class = "btn-outline-success btn-sm"),
+            actionButton(ns("select_unassessed"), "Select Unassessed Only", class = "btn-outline-warning btn-sm")
+          )
+        ),
+        div(
+          class = "col-md-6",
+          tags$label("Actions:", class = "form-label fw-bold"),
+          div(
+            class = "btn-group-sm d-flex flex-wrap gap-1",
+            actionButton(ns("reset_selected"), "Reset Selected", class = "btn-outline-secondary btn-sm"),
+            actionButton(ns("preview_changes"), "Preview Changes", class = "btn-info btn-sm"),
+            actionButton(ns("done"), "Complete Assessment", class = "btn-success btn-sm")
+          )
+        )
+      )
+    ),
+    
+    # Patient Care & Medical Knowledge
+    div(
+      class = "milestone-section",
+      div(
+        class = "d-flex justify-content-between align-items-center mb-3",
+        h4("🏥 Patient Care & Medical Knowledge"),
+        div(
+          class = "form-check",
+          checkboxInput(ns("toggle_pc_mk"), "Select All PC/MK", value = FALSE)
+        )
+      ),
+      uiOutput(ns("pc_mk_milestones"))
+    ),
+    
+    # Systems-Based Practice & Practice-Based Learning  
+    div(
+      class = "milestone-section",
+      div(
+        class = "d-flex justify-content-between align-items-center mb-3",
+        h4("⚙️ Systems-Based Practice & Practice-Based Learning"),
+        div(
+          class = "form-check",
+          checkboxInput(ns("toggle_sbp_pbl"), "Select All SBP/PBL", value = FALSE)
+        )
+      ),
+      uiOutput(ns("sbp_pbl_milestones"))
+    ),
+    
+    # Professionalism & Interpersonal Communication
+    div(
+      class = "milestone-section", 
+      div(
+        class = "d-flex justify-content-between align-items-center mb-3",
+        h4("🤝 Professionalism & Interpersonal Communication"),
+        div(
+          class = "form-check",
+          checkboxInput(ns("toggle_prof_ics"), "Select All PROF/ICS", value = FALSE)
+        )
+      ),
+      uiOutput(ns("prof_ics_milestones"))
+    ),
+    
+    # Status display
+    uiOutput(ns("status_message"))
+  )
+}
+
+#' Enhanced Milestone Rating Server Module
+#' @export
+mod_miles_rating_enhanced_server <- function(id, period, current_milestone_data = NULL) {
+  moduleServer(id, function(input, output, session) {
+    ns <- session$ns
+    
+    # Milestone definitions
+    milestones <- list(
+      pc_mk = list(
+        title = "Patient Care & Medical Knowledge",
+        items = c(
+          "rep_pc1" = "PC1: Gather History & Physical Exam",
+          "rep_pc2" = "PC2: Prioritize Differential Diagnosis", 
+          "rep_pc3" = "PC3: Recommend & Interpret Tests",
+          "rep_pc4" = "PC4: Enter & Discuss Treatment Plans",
+          "rep_pc5" = "PC5: Perform Procedures",
+          "rep_pc6" = "PC6: Transfer of Care",
+          "rep_mk1" = "MK1: Medical Knowledge",
+          "rep_mk2" = "MK2: Clinical Reasoning",
+          "rep_mk3" = "MK3: Scientific Knowledge"
+        )
+      ),
+      sbp_pbl = list(
+        title = "Systems-Based Practice & Practice-Based Learning",
+        items = c(
+          "rep_sbp1" = "SBP1: Patient Safety & Quality Improvement",
+          "rep_sbp2" = "SBP2: System Navigation", 
+          "rep_sbp3" = "SBP3: Physician Role in Healthcare Systems",
+          "rep_pbl1" = "PBL1: Evidence-Based Practice",
+          "rep_pbl2" = "PBL2: Reflective Practice & Commitment to Growth"
+        )
+      ),
+      prof_ics = list(
+        title = "Professionalism & Interpersonal Communication",
+        items = c(
+          "rep_prof1" = "PROF1: Professional Behavior",
+          "rep_prof2" = "PROF2: Ethical Principles",
+          "rep_prof3" = "PROF3: Accountability", 
+          "rep_prof4" = "PROF4: Well-being",
+          "rep_ics1" = "ICS1: Patient & Family Communication",
+          "rep_ics2" = "ICS2: Interprofessional Communication",
+          "rep_ics3" = "ICS3: Communication in Difficult Situations"
+        )
+      )
+    )
+    
+    # Reactive values
+    values <- reactiveValues(
+      scores = list(),
+      original_scores = list(),
+      current_scores = list(),  # Current scores from program milestones
+      selected_milestones = list(),
+      is_done = FALSE,
+      data_loaded = FALSE
+    )
+    
+    # Helper functions
+    get_level_name <- function(score) {
+      case_when(
+        is.na(score) || score == 0 ~ "Not Assessed",
+        score <= 2 ~ "Novice",
+        score <= 4 ~ "Adv. Beginner", 
+        score <= 6 ~ "Competent",
+        score <= 8 ~ "Proficient",
+        score == 9 ~ "Expert",
+        TRUE ~ "Unknown"
+      )
+    }
+    
+    get_level_class <- function(score) {
+      case_when(
+        is.na(score) || score == 0 ~ "level-0",
+        score <= 2 ~ "level-1-2",
+        score <= 4 ~ "level-3-4", 
+        score <= 6 ~ "level-5-6",
+        score <= 8 ~ "level-7-8",
+        score == 9 ~ "level-9",
+        TRUE ~ "level-0"
+      )
+    }
+    
+    # Initialize with current milestone data
+    observe({
+      req(period())
+      
+      if (!values$data_loaded) {
+        all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+        
+        # Initialize with default scores
+        for (key in all_milestone_keys) {
+          values$scores[[key]] <- 0
+          values$original_scores[[key]] <- 0
+          values$current_scores[[key]] <- 0
+          values$selected_milestones[[key]] <- FALSE
+        }
+        
+        # Load current milestone data if provided
+        if (!is.null(current_milestone_data()) && nrow(current_milestone_data()) > 0) {
+          current_data <- current_milestone_data()
+          message("Loading current milestone data...")
+          
+          for (key in all_milestone_keys) {
+            if (key %in% names(current_data)) {
+              current_value <- current_data[[key]][1]
+              if (!is.na(current_value) && is.numeric(current_value)) {
+                values$current_scores[[key]] <- current_value
+                values$scores[[key]] <- current_value
+                values$original_scores[[key]] <- current_value
+                
+                # Update slider with current value
+                updateSliderInput(session, key, value = current_value)
+                
+                message("Loaded current value for ", key, ": ", current_value)
+              }
+            }
+          }
+        }
+        
+        values$data_loaded <- TRUE
+        message("Milestone module initialized with current data")
+      }
+    })
+    
+    # Render milestone sections with selection and current values
+    render_milestone_section <- function(section_key) {
+      renderUI({
+        section <- milestones[[section_key]]
+        
+        milestone_items <- lapply(names(section$items), function(milestone_key) {
+          current_score <- values$scores[[milestone_key]] %||% 0
+          current_program_score <- values$current_scores[[milestone_key]] %||% 0
+          is_selected <- values$selected_milestones[[milestone_key]] %||% FALSE
+          
+          div(
+            class = paste("milestone-item", if(is_selected) "selected" else ""),
+            
+            # Selection checkbox and milestone info
+            div(
+              class = "milestone-label",
+              div(
+                class = "form-check d-flex align-items-center",
+                checkboxInput(
+                  ns(paste0("select_", milestone_key)),
+                  label = NULL,
+                  value = is_selected
+                ),
+                span(section$items[[milestone_key]], style = "margin-left: 8px;"),
+                
+                # Image button for milestone details
+                actionButton(
+                  ns(paste0("img_", milestone_key)),
+                  icon("image"),
+                  class = "milestone-image-btn ms-2",
+                  title = "View milestone details"
+                )
+              ),
+              
+              # Current and new level badges
+              div(
+                if (current_program_score > 0) {
+                  span(
+                    class = paste("level-badge me-2", get_level_class(current_program_score)),
+                    "Current: ", get_level_name(current_program_score)
+                  )
+                },
+                span(
+                  class = paste("level-badge", get_level_class(current_score)),
+                  "New: ", get_level_name(current_score)
+                )
+              )
+            ),
+            
+            # Show current program value if different from new value
+            if (current_program_score > 0 && current_program_score != current_score) {
+              div(
+                class = "current-value mb-2",
+                paste("Current program assessment: ", current_program_score, " (", get_level_name(current_program_score), ")")
+              )
+            },
+            
+            # Milestone controls (only show if selected)
+            conditionalPanel(
+              condition = paste0("input['", ns(paste0("select_", milestone_key)), "'] == true"),
+              div(
+                class = "milestone-controls mt-2",
+                div(
+                  class = "milestone-slider",
+                  sliderInput(
+                    ns(milestone_key),
+                    label = NULL,
+                    min = 0,
+                    max = 9, 
+                    value = current_score,
+                    step = 1,
+                    width = "100%"
+                  )
+                ),
+                div(
+                  style = "font-weight: bold; font-size: 1.1em; min-width: 30px; text-align: center;",
+                  textOutput(ns(paste0("score_", milestone_key)), inline = TRUE)
+                )
+              )
+            )
+          )
+        })
+        
+        do.call(tagList, milestone_items)
+      })
+    }
+    
+    # Render each section
+    output$pc_mk_milestones <- render_milestone_section("pc_mk")
+    output$sbp_pbl_milestones <- render_milestone_section("sbp_pbl")
+    output$prof_ics_milestones <- render_milestone_section("prof_ics")
+    
+    # Handle individual milestone selection
+    observe({
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      
+      for (key in all_milestone_keys) {
+        local({
+          key_local <- key
+          
+          # Update selection state
+          observeEvent(input[[paste0("select_", key_local)]], {
+            values$selected_milestones[[key_local]] <- input[[paste0("select_", key_local)]]
+          }, ignoreInit = TRUE)
+          
+          # Update score display
+          output[[paste0("score_", key_local)]] <- renderText({
+            score <- input[[key_local]] %||% 0
+            as.character(score)
+          })
+          
+          # Update stored score
+          observeEvent(input[[key_local]], {
+            if (!is.null(input[[key_local]])) {
+              values$scores[[key_local]] <- input[[key_local]]
+            }
+          }, ignoreInit = TRUE)
+          
+          # Handle milestone image clicks
+          observeEvent(input[[paste0("img_", key_local)]], {
+            show_milestone_image(key_local)
+          })
+        })
+      }
+    })
+    
+    # Selection button handlers
+    observeEvent(input$select_all, {
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      for (key in all_milestone_keys) {
+        updateCheckboxInput(session, paste0("select_", key), value = TRUE)
+      }
+    })
+    
+    observeEvent(input$select_none, {
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      for (key in all_milestone_keys) {
+        updateCheckboxInput(session, paste0("select_", key), value = FALSE)
+      }
+    })
+    
+    observeEvent(input$select_assessed, {
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      for (key in all_milestone_keys) {
+        current_score <- values$current_scores[[key]] %||% 0
+        updateCheckboxInput(session, paste0("select_", key), value = current_score > 0)
+      }
+    })
+    
+    observeEvent(input$select_unassessed, {
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      for (key in all_milestone_keys) {
+        current_score <- values$current_scores[[key]] %||% 0
+        updateCheckboxInput(session, paste0("select_", key), value = current_score == 0)
+      }
+    })
+    
+    # Function to show milestone image modal
+    show_milestone_image <- function(milestone_key) {
+      # Check if image exists in imres package
+      img_path <- system.file("www", "milestones", paste0(milestone_key, ".png"), package = "imres")
+      
+      modal_content <- if (file.exists(img_path)) {
+        tagList(
+          div(style = "text-align: center;",
+              img(src = paste0("imres-images/milestones/", milestone_key, ".png"), 
+                  style = "max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);")),
+          hr(),
+          div(
+            class = "alert alert-info",
+            h5("Assessment Levels:"),
+            tags$ul(
+              tags$li(tags$strong("1-2 (Novice):"), "Requires direct supervision"),
+              tags$li(tags$strong("3-4 (Advanced Beginner):"), "Requires some supervision"),
+              tags$li(tags$strong("5-6 (Competent):"), "Can work independently"),
+              tags$li(tags$strong("7-8 (Proficient):"), "Can supervise others"),
+              tags$li(tags$strong("9 (Expert):"), "Exceptional ability, teaches others")
+            )
+          )
+        )
+      } else {
+        tagList(
+          div(class = "alert alert-warning",
+              h5("Milestone Image Not Available"),
+              p(paste("Detailed visual description for", milestone_key, "would be displayed here."))),
+          div(
+            class = "alert alert-info",
+            h5("Assessment Levels:"),
+            tags$ul(
+              tags$li(tags$strong("1-2 (Novice):"), "Requires direct supervision"),
+              tags$li(tags$strong("3-4 (Advanced Beginner):"), "Requires some supervision"),
+              tags$li(tags$strong("5-6 (Competent):"), "Can work independently"),
+              tags$li(tags$strong("7-8 (Proficient):"), "Can supervise others"),
+              tags$li(tags$strong("9 (Expert):"), "Exceptional ability, teaches others")
+            )
+          )
+        )
+      }
+      
+      showModal(modalDialog(
+        title = paste("Milestone Details:", milestone_key),
+        modal_content,
+        easyClose = TRUE,
+        size = "l",
+        footer = modalButton("Close")
+      ))
+    }
+    
+    # Update progress summary
+    output$progress_summary <- renderText({
+      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+      selected_count <- sum(sapply(all_milestone_keys, function(key) {
+        values$selected_milestones[[key]] %||% FALSE
+      }))
+      
+      paste0(selected_count, " milestones selected for editing")
+    })
+    
+    # Return values
+    return(list(
+      scores = reactive({ values$scores }),
+      selected = reactive({ values$selected_milestones }),
+      done = reactive({ values$is_done })
+    ))
+  })
+}
+
 # Add this JavaScript to your UI or include it in a separate JS file
 milestone_js <- tags$script(HTML("
   // Custom message handlers for milestone interface

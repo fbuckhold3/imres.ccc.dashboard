@@ -1190,15 +1190,46 @@ server <- function(input, output, session) {
   # CCC MILESTONE EDITING MODULE - FIXED
   # ============================================================================
   
-  # Milestone module UI output for CCC editing
+  # Updated CCC milestone editing module UI output
   output$ccc_milestone_module_ui <- renderUI({
     req(values$selected_resident)
     req(values$redcap_period)
     req(input$ccc_mile == "0")  # Only show when milestones are marked as unacceptable
     
-    # Use a different module ID for CCC editing to avoid conflicts
-    mod_miles_rating_ui("ccc_miles")
+    # Use the enhanced milestone module
+    mod_miles_rating_enhanced_ui("ccc_miles")
   })
+  
+  # Initialize enhanced CCC milestone module
+  ccc_miles_mod <- mod_miles_rating_enhanced_server(
+    id = "ccc_miles",
+    period = reactive({
+      req(values$redcap_period)
+      values$redcap_period
+    }),
+    current_milestone_data = reactive({
+      req(values$selected_resident)
+      req(values$redcap_period)
+      
+      # Get current program milestone data for this resident and period
+      data <- app_data()
+      
+      if (!is.null(data$p_miles)) {
+        existing_milestone_data <- data$p_miles %>%
+          filter(
+            name == values$selected_resident$name,
+            period == values$redcap_period
+          )
+        
+        if (nrow(existing_milestone_data) > 0) {
+          message("Providing current milestone data for enhanced module")
+          return(existing_milestone_data[1, ])
+        }
+      }
+      
+      return(NULL)
+    })
+  )
   
   # Initialize CCC milestone module (separate from the main one) - FIXED
   ccc_miles_mod <- mod_miles_rating_server(
@@ -1271,7 +1302,7 @@ server <- function(input, output, session) {
     )
   })
   
-  # Handle CCC review submission - FIXED
+  # Updated CCC submission to handle concern fields
   observeEvent(input$submit_ccc_review, {
     req(values$selected_resident)
     
@@ -1317,42 +1348,76 @@ server <- function(input, output, session) {
       
       message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
       
-      # Check if milestone edits were made
-      milestone_edits_made <- FALSE
-      milestone_submission_result <- NULL
-      
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0" && !is.null(ccc_miles_mod$scores())) {
-        # Milestones were marked as unacceptable and edits were made
-        message("Milestone concerns detected, saving edited milestones...")
-        
-        # Submit the edited milestone data
-        milestone_submission_result <- submit_milestone_data(
-          redcap_url = redcap_url,
-          redcap_token = token,
-          record_id = record_id,
-          selected_period = values$current_period,
-          resident_level = values$selected_resident$Level,
-          milestone_scores = ccc_miles_mod$scores(),
-          milestone_desc = list() # Empty for now
-        )
-        
-        if (milestone_submission_result$success) {
-          milestone_edits_made <- TRUE
-          message("Milestone edits saved successfully")
-        } else {
-          showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
-                           type = "error", duration = 10)
-          return()  # Don't proceed with CCC submission if milestone save failed
-        }
-      }
-      
-      # Build CCC data
+      # Build CCC data with new concern fields
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
         ccc_session = ccc_session_value,
         ccc_concern = input$ccc_concern
       )
+      
+      # Add concern details if concerns exist
+      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+        # Add concern details
+        if (!is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
+          ccc_data$ccc_concern_details <- input$ccc_concern_details
+        }
+        
+        # Add selected actions (convert checkbox group to comma-separated string)
+        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
+          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
+        }
+        
+        # Add selected competency areas (convert checkbox group to comma-separated string)
+        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
+          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
+        }
+      }
+      
+      # Check if milestone edits were made using enhanced module
+      milestone_edits_made <- FALSE
+      milestone_submission_result <- NULL
+      
+      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+        # Get selected milestones and their scores from enhanced module
+        selected_milestones <- ccc_miles_mod$selected()
+        milestone_scores <- ccc_miles_mod$scores()
+        
+        # Only submit if milestones were actually selected and edited
+        if (!is.null(selected_milestones) && any(unlist(selected_milestones))) {
+          message("Milestone concerns detected, saving edited milestones...")
+          
+          # Filter scores to only include selected milestones
+          selected_scores <- list()
+          for (milestone_name in names(selected_milestones)) {
+            if (selected_milestones[[milestone_name]]) {
+              selected_scores[[milestone_name]] <- milestone_scores[[milestone_name]]
+            }
+          }
+          
+          if (length(selected_scores) > 0) {
+            # Submit the edited milestone data
+            milestone_submission_result <- submit_milestone_data(
+              redcap_url = redcap_url,
+              redcap_token = token,
+              record_id = record_id,
+              selected_period = values$current_period,
+              resident_level = values$selected_resident$Level,
+              milestone_scores = selected_scores,
+              milestone_desc = list() # Empty for now
+            )
+            
+            if (milestone_submission_result$success) {
+              milestone_edits_made <- TRUE
+              message("Milestone edits saved successfully")
+            } else {
+              showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
+                               type = "error", duration = 10)
+              return()  # Don't proceed with CCC submission if milestone save failed
+            }
+          }
+        }
+      }
       
       # Add milestone completion - update based on whether edits were made
       if (input$ccc_rev_type == "1") {
