@@ -1080,26 +1080,65 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
       }
     })
     
-    # Function to load existing milestone data (called from parent)
+    # Function to load existing milestone data (called from parent) - FIXED VERSION
     load_existing_data <- function(existing_data) {
       if (!is.null(existing_data) && nrow(existing_data) > 0) {
         all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
         
+        message("Loading existing milestone data...")
+        message("Available columns in existing_data: ", paste(names(existing_data), collapse = ", "))
+        
+        loaded_count <- 0
+        
         for (key in all_milestone_keys) {
           if (key %in% names(existing_data)) {
             existing_value <- existing_data[[key]][1]
-            if (!is.na(existing_value)) {
-              values$scores[[key]] <- as.numeric(existing_value)
-              values$original_scores[[key]] <- as.numeric(existing_value)
+            
+            # Debug the value being processed
+            message("Processing key: ", key, ", value: ", existing_value, ", class: ", class(existing_value))
+            
+            if (!is.na(existing_value) && !is.null(existing_value)) {
+              # Convert to numeric, handling different data types
+              numeric_value <- tryCatch({
+                if (is.list(existing_value)) {
+                  # If it's a list, try to extract the first element
+                  as.numeric(existing_value[[1]])
+                } else if (is.character(existing_value)) {
+                  # If it's character, convert to numeric
+                  as.numeric(existing_value)
+                } else {
+                  # Otherwise, just convert to numeric
+                  as.numeric(existing_value)
+                }
+              }, error = function(e) {
+                message("Error converting ", key, " to numeric: ", e$message)
+                0
+              })
               
-              # Update the slider input
-              updateSliderInput(session, key, value = as.numeric(existing_value))
+              # Only proceed if we got a valid numeric value
+              if (!is.na(numeric_value) && is.numeric(numeric_value)) {
+                values$scores[[key]] <- numeric_value
+                values$original_scores[[key]] <- numeric_value
+                loaded_count <- loaded_count + 1
+                
+                # Update the slider input safely
+                tryCatch({
+                  updateSliderInput(session, key, value = numeric_value)
+                }, error = function(e) {
+                  message("Error updating slider for ", key, ": ", e$message)
+                })
+                
+                message("Successfully loaded ", key, " = ", numeric_value)
+              } else {
+                message("Could not convert ", key, " to valid numeric value")
+              }
             }
           }
         }
         
-        message("Loaded existing milestone data with ", 
-                sum(sapply(values$scores, function(x) x > 0)), " assessed milestones")
+        message("Loaded existing milestone data with ", loaded_count, " assessed milestones")
+      } else {
+        message("No existing milestone data provided or data is empty")
       }
     }
     
@@ -1176,14 +1215,44 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
       }
     })
     
-    # Update progress summary
+    # Update progress summary - FIXED VERSION
     output$progress_summary <- renderText({
       total_milestones <- length(unlist(lapply(milestones, function(x) names(x$items))))
-      assessed_count <- sum(sapply(values$scores, function(x) x > 0))
-      total_score <- sum(unlist(values$scores))
-      avg_score <- if (assessed_count > 0) round(total_score / assessed_count, 1) else 0
       
-      paste0(assessed_count, "/", total_milestones, " Milestones Assessed | Average Score: ", avg_score)
+      # Safely calculate assessed count and total score
+      assessed_count <- 0
+      total_score <- 0
+      
+      tryCatch({
+        for (score_name in names(values$scores)) {
+          score_value <- values$scores[[score_name]]
+          
+          # Convert to numeric safely
+          numeric_score <- tryCatch({
+            if (is.list(score_value)) {
+              as.numeric(score_value[[1]])
+            } else {
+              as.numeric(score_value)
+            }
+          }, error = function(e) {
+            0
+          })
+          
+          # Only count if it's a valid positive number
+          if (!is.na(numeric_score) && is.numeric(numeric_score) && numeric_score > 0) {
+            assessed_count <- assessed_count + 1
+            total_score <- total_score + numeric_score
+          }
+        }
+        
+        avg_score <- if (assessed_count > 0) round(total_score / assessed_count, 1) else 0
+        
+        paste0(assessed_count, "/", total_milestones, " Milestones Assessed | Average Score: ", avg_score)
+        
+      }, error = function(e) {
+        message("Error calculating progress summary: ", e$message)
+        paste0("0/", total_milestones, " Milestones Assessed | Average Score: 0")
+      })
     })
     
     # Reset functionality
@@ -1247,8 +1316,34 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
     # Done functionality with validation
     observeEvent(input$done, {
       # Validate that assessment is reasonably complete
-      assessed_count <- sum(sapply(values$scores, function(x) x > 0))
+      assessed_count <- 0
       total_milestones <- length(unlist(lapply(milestones, function(x) names(x$items))))
+      
+      # Safely count assessed milestones
+      tryCatch({
+        for (score_name in names(values$scores)) {
+          score_value <- values$scores[[score_name]]
+          
+          # Convert to numeric safely
+          numeric_score <- tryCatch({
+            if (is.list(score_value)) {
+              as.numeric(score_value[[1]])
+            } else {
+              as.numeric(score_value)
+            }
+          }, error = function(e) {
+            0
+          })
+          
+          # Only count if it's a valid positive number
+          if (!is.na(numeric_score) && is.numeric(numeric_score) && numeric_score > 0) {
+            assessed_count <- assessed_count + 1
+          }
+        }
+      }, error = function(e) {
+        message("Error counting assessed milestones: ", e$message)
+        assessed_count <- 0
+      })
       
       if (assessed_count < (total_milestones * 0.3)) {  # Lowered threshold to 30%
         showModal(modalDialog(
@@ -1283,8 +1378,8 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
       done = reactive({ values$is_done }),
       load_data = load_existing_data  # Function to load existing data
     ))
-  })
-}
+  })  # End of moduleServer
+} 
 
 # Add this JavaScript to your UI or include it in a separate JS file
 milestone_js <- tags$script(HTML("
