@@ -841,11 +841,11 @@ visual_milestones_server <- function(id, resident, period, miles, redcap_uri, to
 }
 
 # =============================================================================
-# ADDITIONAL HELPER FUNCTIONS FOR THE MODULE
+# SIMPLIFIED MILESTONE RATING MODULE - FIXED VERSION
 # =============================================================================
 
 #' Create a more user-friendly milestone rating module with better UX
-#' This is a simplified version for easier integration
+#' This is a simplified version for easier integration - FIXED
 #' @export
 mod_miles_rating_ui <- function(id) {
   ns <- NS(id)
@@ -979,7 +979,7 @@ mod_miles_rating_ui <- function(id) {
   )
 }
 
-#' Simplified milestone rating server module - UPDATED to use existing helpers
+#' Simplified milestone rating server module - FIXED VERSION
 #' @export
 mod_miles_rating_server <- function(id, period, resident_level = NULL) {
   moduleServer(id, function(input, output, session) {
@@ -995,7 +995,7 @@ mod_miles_rating_server <- function(id, period, resident_level = NULL) {
           "rep_pc3" = "PC3: Recommend & Interpret Tests",
           "rep_pc4" = "PC4: Enter & Discuss Treatment Plans",
           "rep_pc5" = "PC5: Perform Procedures",
-          "rep_pc6" = "rep_pc6_Transfer of Care",
+          "rep_pc6" = "PC6: Transfer of Care",
           "rep_mk1" = "MK1: Medical Knowledge",
           "rep_mk2" = "MK2: Clinical Reasoning",
           "rep_mk3" = "MK3: Scientific Knowledge"

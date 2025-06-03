@@ -1187,268 +1187,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # SECONDARY REVIEW SUMMARY
-  # ============================================================================
-  
-  output$secondary_review_summary <- renderUI({
-    req(values$selected_resident)
-    
-    # Get resident data
-    resident_data <- processed_resident_data()
-    
-    # Get REDCap instance number for the current period
-    current_app_period <- get_current_period()
-    instance <- map_period_format(
-      level = values$selected_resident$Level,
-      period = current_app_period,
-      return_type = "instance"
-    )
-    
-    # Try to find secondary review data for this resident and period
-    filtered_data <- resident_data %>%
-      filter(name == values$selected_resident$name)
-    
-    # Initialize all variables
-    second_comments <- NULL
-    second_approve <- NULL
-    second_miles_comment <- NULL
-    
-    # Better logic to extract secondary review data
-    if (nrow(filtered_data) > 0) {
-      # Try to match the specific period first if second_period exists
-      if ("second_period" %in% names(filtered_data)) {
-        period_rows <- filtered_data %>%
-          filter(second_period == as.character(instance))
-        
-        if (nrow(period_rows) > 0) {
-          # Get data from period-specific rows
-          for (i in 1:nrow(period_rows)) {
-            # Get comments (prioritize non-empty values)
-            if (is.null(second_comments) && "second_comments" %in% names(period_rows)) {
-              if (!is.na(period_rows$second_comments[i]) && period_rows$second_comments[i] != "") {
-                second_comments <- period_rows$second_comments[i]
-              }
-            }
-            
-            # Get approval status (prioritize non-empty values)
-            if (is.null(second_approve) && "second_approve" %in% names(period_rows)) {
-              if (!is.na(period_rows$second_approve[i]) && period_rows$second_approve[i] != "") {
-                second_approve <- period_rows$second_approve[i]
-              }
-            }
-            
-            # Get milestone comments (prioritize non-empty values)
-            if (is.null(second_miles_comment) && "second_miles_comment" %in% names(period_rows)) {
-              if (!is.na(period_rows$second_miles_comment[i]) && period_rows$second_miles_comment[i] != "") {
-                second_miles_comment <- period_rows$second_miles_comment[i]
-              }
-            }
-          }
-        }
-      }
-      
-      # If still not found, try any non-NA values from all rows
-      if (is.null(second_comments) || is.null(second_approve) || is.null(second_miles_comment)) {
-        for (i in 1:nrow(filtered_data)) {
-          # Get comments
-          if (is.null(second_comments) && "second_comments" %in% names(filtered_data)) {
-            if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
-              second_comments <- filtered_data$second_comments[i]
-            }
-          }
-          
-          # Get approval status
-          if (is.null(second_approve) && "second_approve" %in% names(filtered_data)) {
-            if (!is.na(filtered_data$second_approve[i]) && filtered_data$second_approve[i] != "") {
-              second_approve <- filtered_data$second_approve[i]
-            }
-          }
-          
-          # Get milestone comments
-          if (is.null(second_miles_comment) && "second_miles_comment" %in% names(filtered_data)) {
-            if (!is.na(filtered_data$second_miles_comment[i]) && filtered_data$second_miles_comment[i] != "") {
-              second_miles_comment <- filtered_data$second_miles_comment[i]
-            }
-          }
-        }
-      }
-    }
-    
-    # Create the UI based on what we found
-    if (!is.null(second_comments) && second_comments != "") {
-      
-      # Convert approval values to standardized format
-      approval_status <- NULL
-      if (!is.null(second_approve)) {
-        # Handle different possible values
-        if (second_approve %in% c("1", 1, "yes", "Yes", "YES")) {
-          approval_status <- "approved"
-        } else if (second_approve %in% c("0", 0, "no", "No", "NO")) {
-          approval_status <- "not_approved"
-        }
-      }
-      
-      tagList(
-        # Main Comments Section
-        div(
-          h5("Comments about ILP", class = "text-primary mb-3"),
-          div(
-            style = "
-            background-color: #ffffff;
-            border: 1px solid #dee2e6;
-            border-radius: 8px;
-            padding: 20px;
-            line-height: 1.6;
-            max-height: 300px;
-            overflow-y: auto;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          ",
-            tags$p(second_comments, style = "margin-bottom: 0;")
-          )
-        ),
-        
-        # Milestone Approval Section
-        if (!is.null(approval_status)) {
-          div(
-            class = "mt-4",
-            if (approval_status == "approved") {
-              # SUCCESS: Milestones Approved
-              div(
-                class = "alert alert-success d-flex align-items-center",
-                style = "border-left: 4px solid #28a745;",
-                div(
-                  icon("check-circle", class = "fa-2x text-success me-3"),
-                  div(
-                    tags$h5("Secondary Reviewer Approves Milestones", class = "alert-heading mb-1"),
-                    tags$p("The secondary reviewer has approved the milestone assessments.", class = "mb-0")
-                  )
-                )
-              )
-            } else {
-              # WARNING: Milestones Not Approved + Comments
-              div(
-                div(
-                  class = "alert alert-warning d-flex align-items-center mb-3",
-                  style = "border-left: 4px solid #ffc107;",
-                  div(
-                    icon("exclamation-triangle", class = "fa-2x text-warning me-3"),
-                    div(
-                      tags$h5("Secondary Reviewer Has Concerns", class = "alert-heading mb-1"),
-                      tags$p("The secondary reviewer did not approve the milestone assessments.", class = "mb-0")
-                    )
-                  )
-                ),
-                
-                # Show milestone comments if they exist
-                if (!is.null(second_miles_comment) && second_miles_comment != "") {
-                  div(
-                    h6("Comments about Milestones", class = "text-warning mb-2"),
-                    div(
-                      class = "p-3 bg-warning-subtle border border-warning rounded",
-                      style = "border-left: 4px solid #ffc107 !important;",
-                      tags$p(second_miles_comment, class = "mb-0", style = "font-weight: 500;")
-                    )
-                  )
-                }
-              )
-            }
-          )
-        } else {
-          # No approval status found
-          div(
-            class = "mt-3 alert alert-info",
-            icon("info-circle", class = "me-2"),
-            "Milestone approval status not specified."
-          )
-        }
-      )
-    } else {
-      # No secondary review data found
-      div(
-        class = "text-muted text-center p-5",
-        style = "background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 8px;",
-        icon("info-circle", class = "fa-3x mb-3 text-muted"),
-        tags$h5("No Secondary Review Available", class = "text-muted"),
-        tags$p("No secondary review summary has been completed for this resident.", class = "mb-0")
-      )
-    }
-  })
-  
-  # =============================================================================
-  # MILESTONE MODULE UI OUTPUT UPDATE
-  # =============================================================================
-  
-  # Update the milestone module UI output to pass the resident level
-  output$milestone_module_ui <- renderUI({
-    req(values$selected_resident)
-    req(values$redcap_period)
-    
-    # Pass the resident level to the module
-    mod_miles_rating_ui("miles")
-  })
-  
-  
-  
-  # =============================================================================
-  # MILESTONE DATA LOADING ON RESIDENT SELECTION
-  # =============================================================================
-  
-  # Load existing milestone data when a resident is selected
-  observe({
-    req(values$selected_resident)
-    req(values$redcap_period)
-    
-    # Get existing milestone data for this resident and period
-    data <- app_data()
-    
-    if (!is.null(data$miles)) {
-      # Look for existing milestone data
-      existing_milestone_data <- data$miles %>%
-        filter(
-          name == values$selected_resident$name,
-          prog_mile_period == values$redcap_period
-        )
-      
-      if (nrow(existing_milestone_data) > 0) {
-        message("Found existing milestone data for ", values$selected_resident$name, 
-                " in period ", values$redcap_period)
-        
-        # The milestone module will automatically load this data if it's available
-        # in the miles data that's passed to it
-      } else {
-        message("No existing milestone data found for ", values$selected_resident$name, 
-                " in period ", values$redcap_period)
-      }
-    }
-  })
-  
-  # ============================================================================
-  # CCC REVIEW FORM VALIDATION AND SUBMISSION
-  # ============================================================================
-  
-  output$ccc_form_validation <- renderUI({
-    req(values$selected_resident)
-    
-    tryCatch({
-      # All validation logic goes here, including milestone checks
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-        if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
-          return(div(class = "alert alert-warning", "Action Required: Edit milestones"))
-        }
-      }
-      
-      # Success case
-      div(class = "alert alert-success", "Form ready to submit")
-      
-    }, error = function(e) {
-      div(class = "alert alert-danger", "Validation Error: ", e$message)
-    })
-  })
-
-
-  
-  # ============================================================================
-  # CCC MILESTONE EDITING MODULE
+  # CCC MILESTONE EDITING MODULE - FIXED
   # ============================================================================
   
   # Milestone module UI output for CCC editing
@@ -1461,45 +1200,80 @@ server <- function(input, output, session) {
     mod_miles_rating_ui("ccc_miles")
   })
   
-  # Initialize CCC milestone module (separate from the main one)
+  # Initialize CCC milestone module (separate from the main one) - FIXED
   ccc_miles_mod <- mod_miles_rating_server(
     id = "ccc_miles",
     period = reactive({
       req(values$redcap_period)
       values$redcap_period
     }),
-    # Pass existing milestone data for editing
-    existing_data = reactive({
+    resident_level = reactive({
       req(values$selected_resident)
-      req(values$redcap_period)
-      
-      data <- app_data()
-      
-      # Get existing program milestone data for this resident and period
-      if (!is.null(data$p_miles)) {
-        existing_milestone_data <- data$p_miles %>%
-          filter(
-            name == values$selected_resident$name,
-            period == values$redcap_period
-          )
-        
-        if (nrow(existing_milestone_data) > 0) {
-          message("Loading existing milestone data for CCC editing")
-          return(existing_milestone_data[1, ])  # Return first row
-        }
-      }
-      
-      return(NULL)  # No existing data
+      values$selected_resident$Level
     })
   )
   
-  
-  
-  # Handle CCC review submission confirmation
-  observeEvent(input$confirm_submit_ccc, {
+  # Load existing milestone data for CCC editing
+  observe({
     req(values$selected_resident)
+    req(values$redcap_period)
     
-    removeModal()
+    # Get existing milestone data for this resident and period
+    data <- app_data()
+    
+    if (!is.null(data$p_miles)) {
+      # Look for existing milestone data
+      existing_milestone_data <- data$p_miles %>%
+        filter(
+          name == values$selected_resident$name,
+          period == values$redcap_period
+        )
+      
+      if (nrow(existing_milestone_data) > 0) {
+        message("Found existing milestone data for ", values$selected_resident$name, 
+                " in period ", values$redcap_period)
+        
+        # Load the data into the CCC milestone module
+        if (!is.null(ccc_miles_mod$load_data)) {
+          ccc_miles_mod$load_data(existing_milestone_data[1, ])
+        }
+      } else {
+        message("No existing milestone data found for ", values$selected_resident$name, 
+                " in period ", values$redcap_period)
+      }
+    }
+  })
+  
+  # ============================================================================
+  # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
+  # ============================================================================
+  
+  output$ccc_submit_button <- renderUI({
+    # Check if form is valid for submission
+    can_submit <- TRUE
+    
+    if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+      # If milestones marked unacceptable, require edits and comments
+      if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+        can_submit <- FALSE
+      }
+      if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
+        can_submit <- FALSE
+      }
+    }
+    
+    actionButton(
+      "submit_ccc_review",
+      "Submit CCC Review",
+      class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
+      icon = icon("save"),
+      disabled = !can_submit
+    )
+  })
+  
+  # Handle CCC review submission - FIXED
+  observeEvent(input$submit_ccc_review, {
+    req(values$selected_resident)
     
     # Show processing notification
     withProgress(message = "Submitting CCC review...", {
@@ -1559,7 +1333,7 @@ server <- function(input, output, session) {
           selected_period = values$current_period,
           resident_level = values$selected_resident$Level,
           milestone_scores = ccc_miles_mod$scores(),
-          milestone_desc = ccc_miles_mod$desc()
+          milestone_desc = list() # Empty for now
         )
         
         if (milestone_submission_result$success) {
@@ -1572,7 +1346,7 @@ server <- function(input, output, session) {
         }
       }
       
-      # Then continue with your existing CCC data building...
+      # Build CCC data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
@@ -1598,11 +1372,6 @@ server <- function(input, output, session) {
         } else {
           ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
         }
-      }
-      
-      # Add milestone completion for scheduled reviews
-      if (input$ccc_rev_type == "1" && !is.null(input$ccc_mile)) {
-        ccc_data$ccc_mile <- input$ccc_mile
       }
       
       # Add comments if provided
@@ -1715,28 +1484,5 @@ server <- function(input, output, session) {
       }
     })
   })
-  output$ccc_submit_button <- renderUI({
-    # Check if form is valid for submission
-    can_submit <- TRUE
-    
-    if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-      # If milestones marked unacceptable, require edits and comments
-      if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
-        can_submit <- FALSE
-      }
-      if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
-        can_submit <- FALSE
-      }
-    }
-    
-    actionButton(
-      "submit_ccc_review",
-      "Submit CCC Review",
-      class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
-      icon = icon("save"),
-      disabled = !can_submit
-    )
-  })
   
 } # End of server function
-

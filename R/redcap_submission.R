@@ -700,8 +700,6 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
   }
 }
 
-
-
 #' Submit secondary review data to REDCap
 #'
 #' @param record_id Resident record ID
@@ -989,32 +987,10 @@ test_coach_review_submission <- function(url, token, record_id, instance) {
   }
 }
 
-# Add this observer to run a test when needed
-observeEvent(input$test_redcap_submission, {
-  req(app_data()$redcap_url)
-  req(app_data()$rdm_token)
-  
-  # Show processing notification
-  id <- showNotification("Testing REDCap submission...", type = "message", duration = NULL)
-  
-  # URL and token
-  redcap_url <- app_data()$redcap_url %||% "https://redcapsurvey.slu.edu/api/"
-  token <- app_data()$rdm_token
-  
-  # Choose a test record ID and instance
-  test_record_id <- "999999" # Use a high number unlikely to exist
-  test_instance <- "8"  # Instance 8 is usually Interim
-  
-  # Run the test
-  result <- test_coach_review_submission(redcap_url, token, test_record_id, test_instance)
-  
-  # Remove notification
-  removeNotification(id)
-  
-  # Show result
-  if (result) {
-    showNotification("Test successful! Check the logs for details.", type = "message")
-  } else {
-    showNotification("Test failed. Check the logs for details.", type = "error")
-  }
-})
+# REMOVED THE OBSERVER BLOCK THAT WAS CAUSING THE ERROR
+# The following observer block was outside of a server function and causing the "object 'input' not found" error:
+# observeEvent(input$test_redcap_submission, {
+#   ...
+# })
+
+# Note: If you need REDCap testing functionality, add this observer block inside your server function instead.
