@@ -1,8 +1,8 @@
-# UI Definition with Access Code and Navigation
+# Fixed UI Definition - Main Content Area
 ui <- page_fluid(
   theme = bs_theme(
     version = 5,
-    primary = "#87CEEB",    # Light blue instead of dark blue
+    primary = "#87CEEB",
     secondary = "#56B4E9", 
     success = "#009E73",
     warning = "#F0E442",
@@ -144,7 +144,7 @@ ui <- page_fluid(
           )
         ),
         
-        # Follow-up List Option (Under Construction)
+        # Follow-up List Option
         column(
           width = 5,
           div(
@@ -201,7 +201,7 @@ ui <- page_fluid(
     ),
     
     # ============================================================================
-    # CCC PAGES (Contains both dashboard and review pages)
+    # CCC PAGES
     # ============================================================================
     div(
       id = "ccc-pages",
@@ -220,7 +220,7 @@ ui <- page_fluid(
       ),
       
       # ============================================================================
-      # CCC DASHBOARD PAGE (Your working table)
+      # CCC DASHBOARD PAGE (Resident table)
       # ============================================================================
       div(
         id = "ccc-dashboard-page",
@@ -261,59 +261,7 @@ ui <- page_fluid(
                   class = "mb-3 text-center fw-bold table-instruction",
                   "Click on a resident row to start the review process"
                 ),
-                
-                # The main CCC residents table
                 DT::dataTableOutput("ccc_residents_table")
-              )
-            )
-          )
-        ),
-        
-        # Under construction notice for Follow-up List
-        conditionalPanel(
-          condition = "false", # This will be shown when select_ccc is clicked
-          fluidRow(
-            column(
-              width = 10,
-              offset = 1,
-              card(
-                card_header(
-                  div(
-                    class = "d-flex justify-content-between align-items-center",
-                    h3("Follow-up List Dashboard", class = "mb-0"),
-                    div(
-                      class = "badge bg-warning text-dark",
-                      "Coming Soon"
-                    )
-                  )
-                ),
-                card_body(
-                  div(
-                    class = "text-center p-5",
-                    icon("tools", class = "fa-4x text-warning mb-4"),
-                    h4("Follow-up List Feature Under Development"),
-                    p("The Follow-up List dashboard is currently being developed.", class = "lead"),
-                    p("This will include:"),
-                    tags$ul(
-                      class = "text-left d-inline-block",
-                      tags$li("Review of completed coaching sessions"),
-                      tags$li("Milestone progress assessment"),
-                      tags$li("Concern identification and tracking"),
-                      tags$li("Follow-up action planning"),
-                      tags$li("CCC decision documentation")
-                    ),
-                    div(
-                      class = "mt-4",
-                      p("For now, please use the ILP and Milestone Review dashboard above."),
-                      actionButton(
-                        "ccc_to_coaching",
-                        "Go to ILP Review Dashboard",
-                        class = "btn-primary",
-                        icon = icon("chalkboard-teacher")
-                      )
-                    )
-                  )
-                )
               )
             )
           )
@@ -371,36 +319,152 @@ ui <- page_fluid(
           )
         ),
         
-        # Concerns
-        radioButtons(
-          "ccc_concern",
-          "Are there any concerns about this resident?",
-          choices = c(
-            "No" = "0",
-            "Yes" = "1"
-          ),
-          selected = character(0)
-        ),
-        
-        # Keep only this one conditionalPanel for concerns
-        conditionalPanel(
-          condition = "input.ccc_concern == '1'",
-          div(
-            class = "alert alert-warning",
-            tags$p(
-              tags$strong("Please describe the concerns:"),
-              "Your comments will be reviewed by the CCC."
+        # FIXED: Coach ILP Summary and Secondary Review Summary
+        fluidRow(
+          column(
+            width = 6,
+            # Coach ILP Summary
+            card(
+              card_header("Coach ILP Summary"),
+              card_body(
+                uiOutput("coach_ilp_summary")
+              )
             ),
-            textAreaInput(
-              "ccc_concern_details", 
-              label = NULL,
-              rows = 4,
-              width = "100%",
-              placeholder = "Describe the specific concerns about this resident..."
+            
+            # Secondary Review Summary (moved below ILP)
+            br(),
+            card(
+              card_header("Secondary Review Summary"),
+              card_body(
+                uiOutput("secondary_review_summary")
+              )
+            )
+          ),
+          
+          # CCC Review Entry Form
+          column(
+            width = 6,
+            card(
+              card_header("CCC Review Entry"),
+              card_body(
+                # Review Type
+                radioButtons(
+                  "ccc_rev_type",
+                  "Review Type:",
+                  choices = c(
+                    "Scheduled Review" = "1",
+                    "Interim Review" = "2"
+                  ),
+                  selected = character(0)
+                ),
+                
+                # Session (for scheduled reviews)
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '1'",
+                  selectInput(
+                    "ccc_session",
+                    "Review Session:",
+                    choices = c(
+                      "Select session..." = "",
+                      "Mid Intern" = "1",
+                      "End Intern" = "2",
+                      "Mid PGY2" = "3",
+                      "End PGY2" = "4",
+                      "Mid PGY3" = "5",
+                      "Graduation" = "6",
+                      "Intern Intro" = "7"
+                    ),
+                    selected = ""
+                  )
+                ),
+                
+                # Concerns - FIXED: Only one text box
+                radioButtons(
+                  "ccc_concern",
+                  "Are there any concerns about this resident?",
+                  choices = c(
+                    "No" = "0",
+                    "Yes" = "1"
+                  ),
+                  selected = character(0)
+                ),
+                
+                conditionalPanel(
+                  condition = "input.ccc_concern == '1'",
+                  div(
+                    class = "alert alert-warning",
+                    tags$p(tags$strong("Please describe the concerns:")),
+                    textAreaInput(
+                      "ccc_concern_details", 
+                      label = NULL,
+                      rows = 4,
+                      width = "100%",
+                      placeholder = "Describe the specific concerns about this resident..."
+                    )
+                  )
+                ),
+                
+                # Milestone completion (for scheduled reviews)
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '1'",
+                  radioButtons(
+                    "ccc_mile",
+                    "Are the milestones complete and acceptable?",
+                    choices = c(
+                      "No" = "0",
+                      "Yes" = "1"
+                    ),
+                    selected = character(0)
+                  )
+                ),
+                
+                # Milestone editing section - FIXED
+                conditionalPanel(
+                  condition = "input.ccc_mile == '0'",
+                  div(
+                    class = "milestone-edit-section mt-3",
+                    card(
+                      card_header(
+                        div(
+                          class = "d-flex justify-content-between align-items-center",
+                          h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
+                          tags$small("Make corrections to the milestone ratings below", class = "text-muted")
+                        )
+                      ),
+                      card_body(
+                        # Comments about milestone changes
+                        textAreaInput(
+                          "ccc_mile_concerns", 
+                          label = "Comments about milestone changes:",
+                          rows = 3,
+                          width = "100%",
+                          placeholder = "Explain what milestone changes you made and why..."
+                        ),
+                        # Milestone editing module
+                        uiOutput("ccc_milestone_module_ui")
+                      )
+                    )
+                  )
+                ),
+                
+                # Additional Comments
+                textAreaInput(
+                  "ccc_comments",
+                  "Additional Comments:",
+                  rows = 5,
+                  placeholder = "Enter any additional comments about this resident's review..."
+                ),
+                
+                # Submit button
+                div(
+                  class = "text-center mt-3",
+                  uiOutput("ccc_submit_button")
+                )
+              )
             )
           )
         )
       )
     )
-  )
-)
+  ) # End of main-content div
+) #
