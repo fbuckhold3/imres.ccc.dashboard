@@ -2,13 +2,14 @@
 ui <- page_fluid(
   theme = bs_theme(
     version = 5,
-    primary = "#87CEEB",
-    secondary = "#56B4E9", 
-    success = "#009E73",
-    warning = "#F0E442",
-    danger = "#D55E00",
-    bg = "#FFFFFF",
-    fg = "#2c3e50"
+    primary = "#2c3e50",        # Dark blue-gray (professional)
+    secondary = "#34495e",      # Slightly lighter blue-gray
+    success = "#27ae60",        # Modern green
+    warning = "#f39c12",        # Warm orange
+    danger = "#e74c3c",         # Modern red
+    info = "#3498db",           # Bright blue (used sparingly)
+    bg = "#ffffff",             # Clean white
+    fg = "#2c3e50"              # Dark text
   ),
   
   # Enable shinyjs
@@ -230,7 +231,9 @@ ui <- page_fluid(
           column(
             width = 12,
             card(
-              card_header("Filter Options"),
+              card_header("Filter Options",
+                          `data-card-type` = "filters"
+                          ),
               card_body(
                 div(
                   class = "d-flex flex-wrap gap-2 mb-3",
@@ -255,7 +258,9 @@ ui <- page_fluid(
           column(
             width = 12,
             card(
-              card_header("All Residents - ILP and Milestone Review Status"),
+              card_header("All Residents - ILP and Milestone Review Status",
+                          `data-card-type` = "resident-table"
+                          ),
               card_body(
                 p(
                   class = "mb-3 text-center fw-bold table-instruction",
@@ -302,7 +307,9 @@ ui <- page_fluid(
           column(
             width = 12,
             card(
-              card_header("Milestone Assessments"),
+              card_header("Milestone Assessments",
+                          `data-card-type` = "milestones"
+                          ),
               card_body(
                 fluidRow(
                   column(6, 
@@ -319,33 +326,54 @@ ui <- page_fluid(
           )
         ),
         
-        # FIXED: Coach ILP Summary and Secondary Review Summary
+        # Coach ILP Summary, Secondary Review Summary, and Basic CCC Questions
         fluidRow(
           column(
             width = 6,
             # Coach ILP Summary
             card(
-              card_header("Coach ILP Summary"),
+              card_header("Coach ILP Summary",
+              `data-card-type` = "coach-ilp"
+              ),
               card_body(
                 uiOutput("coach_ilp_summary")
               )
             ),
             
-            # Secondary Review Summary (moved below ILP)
+            # Secondary Review Summary
             br(),
             card(
-              card_header("Secondary Review Summary"),
+              card_header("Secondary Review Summary",
+                          `data-card-type` = "secondary-review"
+                          ),
               card_body(
                 uiOutput("secondary_review_summary")
               )
-            )
-          ),
-          
-          # CCC Review Entry Form
-          column(
-            width = 6,
+            ),
+            
+            # NEW: CCC Comments on ILP
+            br(),
             card(
-              card_header("CCC Review Entry"),
+              card_header("CCC Comments on ILP",
+                          `data-card-type` = "ccc-ilp"
+                          ),
+              card_body(
+                textAreaInput(
+                  "ccc_ilp",
+                  label = NULL,
+                  rows = 4,
+                  width = "100%",
+                  placeholder = "Enter CCC comments about the resident's ILP (Individual Learning Plan)..."
+                )
+              )
+            ),
+            
+            # Basic CCC Questions (LEFT SIDE)
+            br(),
+            card(
+              card_header("CCC Review - Basic Information",
+                          `data-card-type` = "ccc-basic"
+                          ),
               card_body(
                 # Review Type
                 radioButtons(
@@ -378,68 +406,6 @@ ui <- page_fluid(
                   )
                 ),
                 
-                # Concerns - matches REDCap ccc_concern field
-                radioButtons(
-                  "ccc_concern",
-                  "Any concerns of the CCC?",
-                  choices = c(
-                    "No" = "0",
-                    "Yes" = "1"
-                  ),
-                  selected = character(0)
-                ),
-                
-                # Show additional fields when concerns = Yes
-                conditionalPanel(
-                  condition = "input.ccc_concern == '1'",
-                  div(
-                    class = "alert alert-warning",
-                    
-                    # Actions suggested by CCC - matches REDCap ccc_action field
-                    checkboxGroupInput(
-                      "ccc_action",
-                      "Actions suggested by CCC:",
-                      choices = c(
-                        "Remediation plan" = "1",
-                        "Probation" = "2", 
-                        "Referral for professionalism" = "3",
-                        "Coach follow up" = "4",
-                        "Meet with PD and or CCC Chair" = "5",
-                        "Other (see notes)" = "6"
-                      ),
-                      selected = character(0)
-                    ),
-                    
-                    # Competency areas - matches REDCap ccc_competency field  
-                    checkboxGroupInput(
-                      "ccc_competency",
-                      "Which area(s) of competence, if any? (can select more than one):",
-                      choices = c(
-                        "Patient Care" = "1",
-                        "Medical Knowledge" = "2",
-                        "Systems-based Practice" = "3", 
-                        "Practice-based Learning and Improvement" = "4",
-                        "Professionalism" = "5",
-                        "Interpersonal Communication Skills" = "6",
-                        "Not a competence concern" = "7"
-                      ),
-                      selected = character(0)
-                    )
-                  )
-                ),
-                
-                # Issues for follow up - ALWAYS SHOWN (matches REDCap ccc_issues_follow_up field)
-                div(
-                  class = "mt-3",
-                  textAreaInput(
-                    "ccc_issues_follow_up",
-                    "Issues for the Program to deal with or follow up / action items? (Type NA if none):",
-                    rows = 4,
-                    width = "100%",
-                    placeholder = "Enter any issues for program follow-up or type 'NA' if none..."
-                  )
-                ),
-                
                 # Milestone completion (for scheduled reviews)
                 conditionalPanel(
                   condition = "input.ccc_rev_type == '1'",
@@ -454,49 +420,143 @@ ui <- page_fluid(
                   )
                 ),
                 
-                # Milestone editing section - FIXED
-                conditionalPanel(
-                  condition = "input.ccc_mile == '0'",
-                  div(
-                    class = "milestone-edit-section mt-3",
-                    card(
-                      card_header(
-                        div(
-                          class = "d-flex justify-content-between align-items-center",
-                          h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
-                          tags$small("Make corrections to the milestone ratings below", class = "text-muted")
-                        )
-                      ),
-                      card_body(
-                        # Comments about milestone changes
-                        textAreaInput(
-                          "ccc_mile_concerns", 
-                          label = "Comments about milestone changes:",
-                          rows = 3,
-                          width = "100%",
-                          placeholder = "Explain what milestone changes you made and why..."
-                        ),
-                        # Milestone editing module
-                        uiOutput("ccc_milestone_module_ui")
-                      )
-                    )
-                  )
+                # Concerns - matches REDCap ccc_concern field
+                radioButtons(
+                  "ccc_concern",
+                  "Any concerns of the CCC?",
+                  choices = c(
+                    "No" = "0",
+                    "Yes" = "1"
+                  ),
+                  selected = character(0)
                 ),
                 
-                # Additional Comments
+                # Issues for follow up - ALWAYS SHOWN
+                textAreaInput(
+                  "ccc_issues_follow_up",
+                  "Issues for the Program to deal with or follow up / action items? (Type NA if none):",
+                  rows = 4,
+                  width = "100%",
+                  placeholder = "Enter any issues for program follow-up or type 'NA' if none..."
+                ),
+                
+                # General Comments
                 textAreaInput(
                   "ccc_comments",
                   "Additional Comments:",
-                  rows = 5,
+                  rows = 4,
                   placeholder = "Enter any additional comments about this resident's review..."
-                ),
-                
-                # Submit button
-                div(
-                  class = "text-center mt-3",
-                  uiOutput("ccc_submit_button")
                 )
               )
+            )
+          ),
+          
+          # RIGHT SIDE - Conditional/Dependent Fields
+          column(
+            width = 6,
+            
+            # Milestone editing section - ONLY when milestones unacceptable
+            conditionalPanel(
+              condition = "input.ccc_mile == '0'",
+              card(
+                card_header(
+                  div(
+                    class = "d-flex justify-content-between align-items-center",
+                    h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
+                    tags$small("Select and edit specific milestones that need corrections", class = "text-muted")
+                  )
+                ),
+                card_body(
+                  # Comments about milestone changes
+                  textAreaInput(
+                    "ccc_mile_concerns", 
+                    label = "Comments about milestone changes:",
+                    rows = 3,
+                    width = "100%",
+                    placeholder = "Explain what milestone changes you made and why..."
+                  ),
+                  
+                  # Enhanced milestone editing module
+                  mod_ccc_miles_ui("ccc_miles")
+                )
+              )
+            ),
+            
+            # Concern details section - ONLY when concerns = Yes
+            conditionalPanel(
+              condition = "input.ccc_concern == '1'",
+              card(
+                card_header(
+                  div(
+                    class = "d-flex align-items-center",
+                    icon("exclamation-triangle", class = "text-warning me-2"),
+                    h5("CCC Concern Details", class = "mb-0 text-warning")
+                  )
+                ),
+                card_body(
+                  div(
+                    class = "alert alert-warning mb-3",
+                    tags$p(
+                      tags$strong("Concerns have been identified."),
+                      " Please specify the actions and competency areas below."
+                    )
+                  ),
+                  
+                  # Actions suggested by CCC - matches REDCap ccc_action field
+                  checkboxGroupInput(
+                    "ccc_action",
+                    "Actions suggested by CCC:",
+                    choices = c(
+                      "Remediation plan" = "1",
+                      "Probation" = "2", 
+                      "Referral for professionalism" = "3",
+                      "Coach follow up" = "4",
+                      "Meet with PD and or CCC Chair" = "5",
+                      "Other (see notes)" = "6"
+                    ),
+                    selected = character(0)
+                  ),
+                  
+                  # Competency areas - matches REDCap ccc_competency field  
+                  checkboxGroupInput(
+                    "ccc_competency",
+                    "Which area(s) of competence, if any? (can select more than one):",
+                    choices = c(
+                      "Patient Care" = "1",
+                      "Medical Knowledge" = "2",
+                      "Systems-based Practice" = "3", 
+                      "Practice-based Learning and Improvement" = "4",
+                      "Professionalism" = "5",
+                      "Interpersonal Communication Skills" = "6",
+                      "Not a competence concern" = "7"
+                    ),
+                    selected = character(0)
+                  )
+                )
+              )
+            ),
+            
+            # Placeholder when no conditional fields are shown
+            conditionalPanel(
+              condition = "input.ccc_mile != '0' && input.ccc_concern != '1'",
+              div(
+                class = "text-center p-5",
+                style = "background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; margin-top: 20px;",
+                icon("info-circle", class = "fa-3x text-muted mb-3"),
+                h5("Additional Fields", class = "text-muted"),
+                p("Additional options will appear here based on your selections:", class = "text-muted mb-2"),
+                tags$ul(
+                  class = "text-muted text-start d-inline-block",
+                  tags$li("Milestone editing (if milestones need correction)"),
+                  tags$li("Concern details (if concerns are identified)")
+                )
+              )
+            ),
+            
+            # Submit button - ALWAYS at bottom right
+            div(
+              class = "text-center mt-4",
+              uiOutput("ccc_submit_button")
             )
           )
         )

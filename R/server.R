@@ -1409,12 +1409,19 @@ server <- function(input, output, session) {
       
       message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
       
+      # Build CCC data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
         ccc_session = ccc_session_value,
         ccc_concern = input$ccc_concern
       )
+      
+      # NEW: Add CCC comments on ILP
+      if (!is.null(input$ccc_ilp) && trimws(input$ccc_ilp) != "") {
+        ccc_data$ccc_ilp <- trimws(input$ccc_ilp)
+        message("CCC ILP comments added: ", substr(ccc_data$ccc_ilp, 1, 50), "...")
+      }
       
       # Add concern-related fields if concerns exist
       if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
@@ -1424,7 +1431,6 @@ server <- function(input, output, session) {
         
         # Actions suggested by CCC (checkbox group) - REQUIRED when concerns = Yes
         if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
-          # Convert checkbox array to REDCap format (comma-separated)
           ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
           message("CCC Actions selected: ", ccc_data$ccc_action)
         } else {
@@ -1433,7 +1439,6 @@ server <- function(input, output, session) {
         
         # Competency areas (checkbox group) - REQUIRED when concerns = Yes
         if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
-          # Convert checkbox array to REDCap format
           ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
           message("Competency areas selected: ", ccc_data$ccc_competency)
         } else {
