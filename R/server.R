@@ -33,6 +33,23 @@ server <- function(input, output, session) {
     return(data)
   })
   
+  # Add this function to your helpers.R or include it in server.R
+  setup_milestone_images <- function() {
+    # Check if milestone images directory exists in imres package
+    milestones_path <- system.file("www", "milestones", package = "imres")
+    
+    if (dir.exists(milestones_path)) {
+      message("Milestone images directory found - images will be available")
+      return(TRUE)
+    } else {
+      message("Milestone images directory not found - using placeholder content")
+      return(FALSE)
+    }
+  }
+  
+  # Call this in your server initialization
+  milestone_images_available <- setup_milestone_images()
+  
   # ============================================================================
   # ACCESS CODE AUTHENTICATION
   # ============================================================================
@@ -1187,33 +1204,30 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # CCC MILESTONE EDITING MODULE - FIXED
+  # UPDATED CCC MILESTONE EDITING MODULE INTEGRATION
   # ============================================================================
   
-  # Updated CCC milestone editing module UI output
+  # Replace your existing ccc_milestone_module_ui output with this:
   output$ccc_milestone_module_ui <- renderUI({
     req(values$selected_resident)
     req(values$redcap_period)
     req(input$ccc_mile == "0")  # Only show when milestones are marked as unacceptable
     
-    # Use the enhanced milestone module
-    mod_miles_rating_enhanced_ui("ccc_miles")
+    # Use the new enhanced module
+    mod_ccc_miles_ui("ccc_miles")
   })
   
-  # Initialize enhanced CCC milestone module
-  ccc_miles_mod <- mod_miles_rating_enhanced_server(
+  # Replace your existing ccc_miles_mod initialization with this:
+  ccc_miles_mod <- mod_ccc_miles_server(
     id = "ccc_miles",
-    period = reactive({
-      req(values$redcap_period)
-      values$redcap_period
-    }),
-    current_milestone_data = reactive({
+    # Pass existing milestone data for editing with proper field mapping
+    existing_data = reactive({
       req(values$selected_resident)
       req(values$redcap_period)
       
-      # Get current program milestone data for this resident and period
       data <- app_data()
       
+      # Get existing program milestone data for this resident and period
       if (!is.null(data$p_miles)) {
         existing_milestone_data <- data$p_miles %>%
           filter(
@@ -1223,6 +1237,59 @@ server <- function(input, output, session) {
         
         if (nrow(existing_milestone_data) > 0) {
           message("Providing current milestone data for enhanced module")
+          message("Loading current milestone data...")
+          return(existing_milestone_data[1, ])
+        }
+      }
+      
+      # Also try to get data from the main milestone data if p_miles doesn't work
+      if (!is.null(data$miles)) {
+        existing_milestone_data <- data$miles %>%
+          filter(
+            name == values$selected_resident$name,
+            prog_mile_period == values$redcap_period
+          )
+        
+        if (nrow(existing_milestone_data) > 0) {
+          message("Found milestone data in main miles dataset")
+          return(existing_milestone_data[1, ])
+        }
+      }
+      
+      message("No existing milestone data found")
+      return(NULL)
+    })
+  )
+  
+  # Initialize enhanced CCC milestone module
+  # Initialize CCC milestone module (separate from the main one)
+  ccc_miles_mod <- mod_miles_rating_server(
+    id = "ccc_miles",
+    period = reactive({
+      req(values$redcap_period)
+      values$redcap_period
+    }),
+    # IMPROVED: Pass existing milestone data for editing with auto-load
+    existing_data = reactive({
+      req(values$selected_resident)
+      req(values$redcap_period)
+      
+      data <- app_data()
+      
+      # Get existing program milestone data for this resident and period
+      if (!is.null(data$p_miles)) {
+        existing_milestone_data <- data$p_miles %>%
+          filter(
+            name == values$selected_resident$name,
+            period == values$redcap_period
+          )
+        
+        if (nrow(existing_milestone_data) > 0) {
+          message("Loading existing milestone data for CCC editing")
+          # Trigger auto-load in the module
+          shinyjs::delay(500, {
+            ccc_miles_mod$load_data(existing_milestone_data[1, ])
+          })
           return(existing_milestone_data[1, ])
         }
       }
@@ -1231,75 +1298,55 @@ server <- function(input, output, session) {
     })
   )
   
-  # Initialize CCC milestone module (separate from the main one) - FIXED
-  ccc_miles_mod <- mod_miles_rating_server(
-    id = "ccc_miles",
-    period = reactive({
-      req(values$redcap_period)
-      values$redcap_period
-    }),
-    resident_level = reactive({
-      req(values$selected_resident)
-      values$selected_resident$Level
-    })
-  )
-  
-  # Load existing milestone data for CCC editing
-  observe({
-    req(values$selected_resident)
-    req(values$redcap_period)
-    
-    # Get existing milestone data for this resident and period
-    data <- app_data()
-    
-    if (!is.null(data$p_miles)) {
-      # Look for existing milestone data
-      existing_milestone_data <- data$p_miles %>%
-        filter(
-          name == values$selected_resident$name,
-          period == values$redcap_period
-        )
-      
-      if (nrow(existing_milestone_data) > 0) {
-        message("Found existing milestone data for ", values$selected_resident$name, 
-                " in period ", values$redcap_period)
-        
-        # Load the data into the CCC milestone module
-        if (!is.null(ccc_miles_mod$load_data)) {
-          ccc_miles_mod$load_data(existing_milestone_data[1, ])
-        }
-      } else {
-        message("No existing milestone data found for ", values$selected_resident$name, 
-                " in period ", values$redcap_period)
-      }
-    }
-  })
-  
   # ============================================================================
   # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
   # ============================================================================
   
+  # Replace your existing ccc_submit_button output with this:
   output$ccc_submit_button <- renderUI({
     # Check if form is valid for submission
     can_submit <- TRUE
     
+    # If milestones are marked unacceptable, require milestone selections
     if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-      # If milestones marked unacceptable, require edits and comments
-      if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+      # Check if any milestones are selected for editing
+      selected_milestones <- ccc_miles_mod$selected_milestones()
+      has_changes <- ccc_miles_mod$has_changes()
+      
+      if (length(selected_milestones) == 0 || !any(unlist(selected_milestones))) {
         can_submit <- FALSE
       }
+      
+      # Require comments about milestone changes
       if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
         can_submit <- FALSE
       }
     }
     
-    actionButton(
-      "submit_ccc_review",
-      "Submit CCC Review",
-      class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
-      icon = icon("save"),
-      disabled = !can_submit
-    )
+    # Show different button states
+    if (!can_submit && !is.null(input$ccc_mile) && input$ccc_mile == "0") {
+      tagList(
+        div(
+          class = "alert alert-warning mb-3",
+          icon("exclamation-triangle"),
+          " Please select milestones to edit and provide comments about your changes."
+        ),
+        actionButton(
+          "submit_ccc_review",
+          "Complete Requirements First",
+          class = "btn-secondary btn-lg",
+          icon = icon("exclamation-triangle"),
+          disabled = TRUE
+        )
+      )
+    } else {
+      actionButton(
+        "submit_ccc_review",
+        "Submit CCC Review",
+        class = "btn-success btn-lg",
+        icon = icon("save")
+      )
+    }
   })
   
   # Updated CCC submission to handle concern fields
@@ -1308,6 +1355,42 @@ server <- function(input, output, session) {
     
     # Show processing notification
     withProgress(message = "Submitting CCC review...", {
+      
+      # Check if milestone edits were made
+      milestone_edits_made <- FALSE
+      milestone_submission_result <- NULL
+      
+      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+        # Get selected milestone scores from the enhanced module
+        selected_scores <- ccc_miles_mod$scores()
+        
+        if (length(selected_scores) > 0) {
+          message("Milestone concerns detected, saving ", length(selected_scores), " edited milestones...")
+          
+          # Submit the edited milestone data using your existing function
+          milestone_submission_result <- submit_milestone_data(
+            redcap_url = app_data()$url %||% "https://redcapsurvey.slu.edu/api/",
+            redcap_token = app_data()$rdm_token,
+            record_id = find_record_id(app_data(), values$selected_resident$name),
+            selected_period = values$current_period,
+            resident_level = values$selected_resident$Level,
+            milestone_scores = selected_scores,
+            milestone_desc = list() # Empty for now
+          )
+          
+          if (milestone_submission_result$success) {
+            milestone_edits_made <- TRUE
+            message("Milestone edits saved successfully")
+          } else {
+            showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
+                             type = "error", duration = 10)
+            return()  # Don't proceed with CCC submission if milestone save failed
+          }
+        }
+      }
+      
+      # Continue with your existing CCC submission logic...
+      # (Keep the rest of your existing CCC submission code here)
       
       # Get REDCap connection info
       redcap_url <- app_data()$url %||% "https://redcapsurvey.slu.edu/api/"
@@ -1348,7 +1431,7 @@ server <- function(input, output, session) {
       
       message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
       
-      # Build CCC data with new concern fields
+      # Build CCC data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
@@ -1356,67 +1439,9 @@ server <- function(input, output, session) {
         ccc_concern = input$ccc_concern
       )
       
-      # Add concern details if concerns exist
-      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-        # Add concern details
-        if (!is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
-          ccc_data$ccc_concern_details <- input$ccc_concern_details
-        }
-        
-        # Add selected actions (convert checkbox group to comma-separated string)
-        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
-          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
-        }
-        
-        # Add selected competency areas (convert checkbox group to comma-separated string)
-        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
-          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
-        }
-      }
-      
-      # Check if milestone edits were made using enhanced module
-      milestone_edits_made <- FALSE
-      milestone_submission_result <- NULL
-      
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-        # Get selected milestones and their scores from enhanced module
-        selected_milestones <- ccc_miles_mod$selected()
-        milestone_scores <- ccc_miles_mod$scores()
-        
-        # Only submit if milestones were actually selected and edited
-        if (!is.null(selected_milestones) && any(unlist(selected_milestones))) {
-          message("Milestone concerns detected, saving edited milestones...")
-          
-          # Filter scores to only include selected milestones
-          selected_scores <- list()
-          for (milestone_name in names(selected_milestones)) {
-            if (selected_milestones[[milestone_name]]) {
-              selected_scores[[milestone_name]] <- milestone_scores[[milestone_name]]
-            }
-          }
-          
-          if (length(selected_scores) > 0) {
-            # Submit the edited milestone data
-            milestone_submission_result <- submit_milestone_data(
-              redcap_url = redcap_url,
-              redcap_token = token,
-              record_id = record_id,
-              selected_period = values$current_period,
-              resident_level = values$selected_resident$Level,
-              milestone_scores = selected_scores,
-              milestone_desc = list() # Empty for now
-            )
-            
-            if (milestone_submission_result$success) {
-              milestone_edits_made <- TRUE
-              message("Milestone edits saved successfully")
-            } else {
-              showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
-                               type = "error", duration = 10)
-              return()  # Don't proceed with CCC submission if milestone save failed
-            }
-          }
-        }
+      # Add concern details if provided
+      if (!is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
+        ccc_data$ccc_concern_details <- input$ccc_concern_details
       }
       
       # Add milestone completion - update based on whether edits were made
@@ -1439,7 +1464,7 @@ server <- function(input, output, session) {
         }
       }
       
-      # Add comments if provided
+      # Add general comments if provided
       if (!is.null(input$ccc_comments) && input$ccc_comments != "") {
         ccc_data$ccc_comments <- input$ccc_comments
       }
@@ -1506,8 +1531,13 @@ server <- function(input, output, session) {
           
           if (!is.na(records_updated) && records_updated > 0) {
             # Show success message
-            showNotification(paste("CCC review successfully submitted! (", records_updated, " record updated)"), 
-                             type = "message", duration = 5)
+            success_msg <- if (milestone_edits_made) {
+              paste("CCC review and milestone edits successfully submitted! (", records_updated, " record updated)")
+            } else {
+              paste("CCC review successfully submitted! (", records_updated, " record updated)")
+            }
+            
+            showNotification(success_msg, type = "message", duration = 5)
             
             # Navigate back to dashboard
             shinyjs::hide("ccc-review-pages")
@@ -1528,8 +1558,14 @@ server <- function(input, output, session) {
         }, error = function(e) {
           # JSON parsing error - but if we got here with status 200, it probably worked
           message("Parse error but status 200, assuming success: ", e$message)
-          showNotification("CCC review submitted successfully!", 
-                           type = "message", duration = 5)
+          
+          success_msg <- if (milestone_edits_made) {
+            "CCC review and milestone edits submitted successfully!"
+          } else {
+            "CCC review submitted successfully!"
+          }
+          
+          showNotification(success_msg, type = "message", duration = 5)
           
           # Navigate back to dashboard anyway since we got HTTP 200
           shinyjs::hide("ccc-review-pages")
