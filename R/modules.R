@@ -416,7 +416,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       }
     })
     
-    FIXED: Milestone image display function with correct path mapping
+    ### FIXED: Milestone image display function with correct path mapping
     show_milestone_info <- function(milestone_key, milestone_name) {
       
       # FIXED: Map milestone field names to image filenames
