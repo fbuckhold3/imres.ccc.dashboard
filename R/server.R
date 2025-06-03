@@ -1220,63 +1220,12 @@ server <- function(input, output, session) {
   # Replace your existing ccc_miles_mod initialization with this:
   ccc_miles_mod <- mod_ccc_miles_server(
     id = "ccc_miles",
-    # Pass existing milestone data for editing with proper field mapping
     existing_data = reactive({
       req(values$selected_resident)
       req(values$redcap_period)
       
       data <- app_data()
       
-      # Get existing program milestone data for this resident and period
-      if (!is.null(data$p_miles)) {
-        existing_milestone_data <- data$p_miles %>%
-          filter(
-            name == values$selected_resident$name,
-            period == values$redcap_period
-          )
-        
-        if (nrow(existing_milestone_data) > 0) {
-          message("Providing current milestone data for enhanced module")
-          message("Loading current milestone data...")
-          return(existing_milestone_data[1, ])
-        }
-      }
-      
-      # Also try to get data from the main milestone data if p_miles doesn't work
-      if (!is.null(data$miles)) {
-        existing_milestone_data <- data$miles %>%
-          filter(
-            name == values$selected_resident$name,
-            prog_mile_period == values$redcap_period
-          )
-        
-        if (nrow(existing_milestone_data) > 0) {
-          message("Found milestone data in main miles dataset")
-          return(existing_milestone_data[1, ])
-        }
-      }
-      
-      message("No existing milestone data found")
-      return(NULL)
-    })
-  )
-  
-  # Initialize enhanced CCC milestone module
-  # Initialize CCC milestone module (separate from the main one)
-  ccc_miles_mod <- mod_miles_rating_server(
-    id = "ccc_miles",
-    period = reactive({
-      req(values$redcap_period)
-      values$redcap_period
-    }),
-    # IMPROVED: Pass existing milestone data for editing with auto-load
-    existing_data = reactive({
-      req(values$selected_resident)
-      req(values$redcap_period)
-      
-      data <- app_data()
-      
-      # Get existing program milestone data for this resident and period
       if (!is.null(data$p_miles)) {
         existing_milestone_data <- data$p_miles %>%
           filter(
@@ -1286,10 +1235,6 @@ server <- function(input, output, session) {
         
         if (nrow(existing_milestone_data) > 0) {
           message("Loading existing milestone data for CCC editing")
-          # Trigger auto-load in the module
-          shinyjs::delay(500, {
-            ccc_miles_mod$load_data(existing_milestone_data[1, ])
-          })
           return(existing_milestone_data[1, ])
         }
       }
@@ -1297,6 +1242,8 @@ server <- function(input, output, session) {
       return(NULL)
     })
   )
+  
+ 
   
   # ============================================================================
   # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
