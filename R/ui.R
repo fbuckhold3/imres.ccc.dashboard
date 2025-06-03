@@ -378,10 +378,10 @@ ui <- page_fluid(
                   )
                 ),
                 
-                # Concerns - FIXED: Only one text box
+                # Concerns - matches REDCap ccc_concern field
                 radioButtons(
                   "ccc_concern",
-                  "Are there any concerns about this resident?",
+                  "Any concerns of the CCC?",
                   choices = c(
                     "No" = "0",
                     "Yes" = "1"
@@ -389,18 +389,54 @@ ui <- page_fluid(
                   selected = character(0)
                 ),
                 
+                # Show additional fields when concerns = Yes
                 conditionalPanel(
                   condition = "input.ccc_concern == '1'",
                   div(
                     class = "alert alert-warning",
-                    tags$p(tags$strong("Please describe the concerns:")),
-                    textAreaInput(
-                      "ccc_concern_details", 
-                      label = NULL,
-                      rows = 4,
-                      width = "100%",
-                      placeholder = "Describe the specific concerns about this resident..."
+                    
+                    # Actions suggested by CCC - matches REDCap ccc_action field
+                    checkboxGroupInput(
+                      "ccc_action",
+                      "Actions suggested by CCC:",
+                      choices = c(
+                        "Remediation plan" = "1",
+                        "Probation" = "2", 
+                        "Referral for professionalism" = "3",
+                        "Coach follow up" = "4",
+                        "Meet with PD and or CCC Chair" = "5",
+                        "Other (see notes)" = "6"
+                      ),
+                      selected = character(0)
+                    ),
+                    
+                    # Competency areas - matches REDCap ccc_competency field  
+                    checkboxGroupInput(
+                      "ccc_competency",
+                      "Which area(s) of competence, if any? (can select more than one):",
+                      choices = c(
+                        "Patient Care" = "1",
+                        "Medical Knowledge" = "2",
+                        "Systems-based Practice" = "3", 
+                        "Practice-based Learning and Improvement" = "4",
+                        "Professionalism" = "5",
+                        "Interpersonal Communication Skills" = "6",
+                        "Not a competence concern" = "7"
+                      ),
+                      selected = character(0)
                     )
+                  )
+                ),
+                
+                # Issues for follow up - ALWAYS SHOWN (matches REDCap ccc_issues_follow_up field)
+                div(
+                  class = "mt-3",
+                  textAreaInput(
+                    "ccc_issues_follow_up",
+                    "Issues for the Program to deal with or follow up / action items? (Type NA if none):",
+                    rows = 4,
+                    width = "100%",
+                    placeholder = "Enter any issues for program follow-up or type 'NA' if none..."
                   )
                 ),
                 

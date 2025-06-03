@@ -416,18 +416,33 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       }
     })
     
-    # FIXED: Milestone image display function
+    FIXED: Milestone image display function with correct path mapping
     show_milestone_info <- function(milestone_key, milestone_name) {
+      
+      # FIXED: Map milestone field names to image filenames
+      # Remove 'rep_' prefix and handle special cases
+      image_filename <- gsub("^rep_", "", milestone_key)  # Remove 'rep_' prefix
+      
+      # Handle special mapping: pbl -> pbli for images
+      image_filename <- gsub("^pbl", "pbli", image_filename)
+      
+      message("Looking for milestone image: ", image_filename, ".png (from field: ", milestone_key, ")")
+      
       # Check if image exists in imres package
-      img_path <- system.file("www", "milestones", paste0(milestone_key, ".png"), package = "imres")
+      img_path <- system.file("www", "milestones", paste0(image_filename, ".png"), package = "imres")
+      
+      message("Image path: ", img_path)
+      message("Image exists: ", file.exists(img_path))
       
       modal_content <- if (file.exists(img_path)) {
+        message("✅ Found milestone image for ", milestone_key)
         tagList(
           div(
-            style = "text-align: center;",
+            style = "text-align: center; margin-bottom: 20px;",
+            h5(milestone_name, style = "color: #007bff; margin-bottom: 15px;"),
             img(
-              src = paste0("imres/milestones/", milestone_key, ".png"), 
-              style = "max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
+              src = paste0("imres/milestones/", image_filename, ".png"), 
+              style = "max-width: 100%; max-height: 500px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
               alt = paste("Milestone image for", milestone_name)
             )
           ),
@@ -435,23 +450,75 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
           create_milestone_level_guide()
         )
       } else {
+        message("❌ No milestone image found for ", milestone_key, " (looking for: ", image_filename, ".png)")
         tagList(
           div(
             class = "alert alert-info",
-            h5("Milestone Information: ", milestone_name),
-            p("Detailed milestone description and rubric would be displayed here."),
-            p("This milestone assesses specific competencies related to internal medicine practice.")
+            h5(icon("info-circle"), " Milestone Information: ", milestone_name),
+            p("This milestone assesses specific competencies related to internal medicine practice."),
+            p(paste("Expected image file:", image_filename, ".png"), class = "text-muted small"),
+            p("Milestone images help provide visual guidance for assessment levels.", class = "text-muted")
           ),
           create_milestone_level_guide()
         )
       }
       
       showModal(modalDialog(
-        title = paste("Milestone Details:", milestone_key),
+        title = div(
+          icon("graduation-cap"), 
+          paste("Milestone Details:", gsub("^rep_", "", milestone_key))
+        ),
         modal_content,
         easyClose = TRUE,
         size = "l",
         footer = modalButton("Close")
+      ))
+    }
+    
+    # Also add this helper function to test image availability
+    check_milestone_images <- function() {
+      # Define all milestone keys
+      milestone_keys <- c(
+        "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
+        "rep_mk1", "rep_mk2", "rep_mk3",
+        "rep_sbp1", "rep_sbp2", "rep_sbp3",
+        "rep_pbl1", "rep_pbl2",
+        "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
+        "rep_ics1", "rep_ics2", "rep_ics3"
+      )
+      
+      message("=== Checking Milestone Images ===")
+      
+      found_images <- 0
+      missing_images <- c()
+      
+      for (key in milestone_keys) {
+        # Apply same mapping logic
+        image_filename <- gsub("^rep_", "", key)
+        image_filename <- gsub("^pbl", "pbli", image_filename)
+        
+        img_path <- system.file("www", "milestones", paste0(image_filename, ".png"), package = "imres")
+        
+        if (file.exists(img_path)) {
+          message("✅ Found: ", image_filename, ".png")
+          found_images <- found_images + 1
+        } else {
+          message("❌ Missing: ", image_filename, ".png")
+          missing_images <- c(missing_images, paste0(image_filename, ".png"))
+        }
+      }
+      
+      message("=== Summary ===")
+      message("Found: ", found_images, "/", length(milestone_keys), " images")
+      
+      if (length(missing_images) > 0) {
+        message("Missing images: ", paste(missing_images, collapse = ", "))
+      }
+      
+      return(list(
+        found = found_images,
+        total = length(milestone_keys),
+        missing = missing_images
       ))
     }
     

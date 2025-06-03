@@ -1253,6 +1253,13 @@ server <- function(input, output, session) {
   output$ccc_submit_button <- renderUI({
     # Check if form is valid for submission
     can_submit <- TRUE
+    missing_requirements <- character(0)
+    
+    # Basic form requirements
+    if (is.null(input$ccc_rev_type) || input$ccc_rev_type == "") {
+      can_submit <- FALSE
+      missing_requirements <- c(missing_requirements, "Review Type")
+    }
     
     # If milestones are marked unacceptable, require milestone selections
     if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
@@ -1262,21 +1269,45 @@ server <- function(input, output, session) {
       
       if (length(selected_milestones) == 0 || !any(unlist(selected_milestones))) {
         can_submit <- FALSE
+        missing_requirements <- c(missing_requirements, "Milestone selections")
       }
       
       # Require comments about milestone changes
       if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
         can_submit <- FALSE
+        missing_requirements <- c(missing_requirements, "Milestone change comments")
       }
     }
     
+    # If concerns are selected, require action and competency selections
+    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
+        can_submit <- FALSE
+        missing_requirements <- c(missing_requirements, "CCC Actions")
+      }
+      
+      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
+        can_submit <- FALSE
+        missing_requirements <- c(missing_requirements, "Competency Areas")
+      }
+    }
+    
+    # Always require follow-up field (can be "NA")
+    if (is.null(input$ccc_issues_follow_up) || trimws(input$ccc_issues_follow_up) == "") {
+      can_submit <- FALSE
+      missing_requirements <- c(missing_requirements, "Follow-up issues (enter NA if none)")
+    }
+    
     # Show different button states
-    if (!can_submit && !is.null(input$ccc_mile) && input$ccc_mile == "0") {
+    if (!can_submit) {
       tagList(
         div(
           class = "alert alert-warning mb-3",
           icon("exclamation-triangle"),
-          " Please select milestones to edit and provide comments about your changes."
+          " Please complete the following required fields:",
+          tags$ul(
+            lapply(missing_requirements, function(req) tags$li(req))
+          )
         ),
         actionButton(
           "submit_ccc_review",
@@ -1378,7 +1409,6 @@ server <- function(input, output, session) {
       
       message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
       
-      # Build CCC data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
@@ -1386,38 +1416,94 @@ server <- function(input, output, session) {
         ccc_concern = input$ccc_concern
       )
       
-      # Add concern details if provided
-      if (!is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
-        ccc_data$ccc_concern_details <- input$ccc_concern_details
+      # Add concern-related fields if concerns exist
+      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+        
+        # Validate that required concern fields are filled
+        concern_validation_errors <- character(0)
+        
+        # Actions suggested by CCC (checkbox group) - REQUIRED when concerns = Yes
+        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
+          # Convert checkbox array to REDCap format (comma-separated)
+          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
+          message("CCC Actions selected: ", ccc_data$ccc_action)
+        } else {
+          concern_validation_errors <- c(concern_validation_errors, "CCC Actions must be selected when concerns exist")
+        }
+        
+        # Competency areas (checkbox group) - REQUIRED when concerns = Yes
+        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
+          # Convert checkbox array to REDCap format
+          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
+          message("Competency areas selected: ", ccc_data$ccc_competency)
+        } else {
+          concern_validation_errors <- c(concern_validation_errors, "Competency areas must be selected when concerns exist")
+        }
+        
+        # If validation errors exist, stop submission
+        if (length(concern_validation_errors) > 0) {
+          showNotification(
+            paste("Please complete required concern fields:", paste(concern_validation_errors, collapse = "; ")), 
+            type = "error", 
+            duration = 10
+          )
+          return()
+        }
+      }
+      
+      # Issues for follow up - ALWAYS include this field
+      if (!is.null(input$ccc_issues_follow_up) && trimws(input$ccc_issues_follow_up) != "") {
+        ccc_data$ccc_issues_follow_up <- trimws(input$ccc_issues_follow_up)
+        message("Follow-up issues: ", substr(ccc_data$ccc_issues_follow_up, 1, 50), "...")
+      } else {
+        # Default to "NA" if nothing entered
+        ccc_data$ccc_issues_follow_up <- "NA"
+        message("No follow-up issues specified, using 'NA'")
       }
       
       # Add milestone completion - update based on whether edits were made
-      if (input$ccc_rev_type == "1") {
+      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
         if (milestone_edits_made) {
           # If edits were made, mark milestones as now acceptable
           ccc_data$ccc_mile <- "1"  # Yes - now acceptable after edits
+          message("Milestones marked as acceptable after edits")
         } else {
           # Use the original input value
-          ccc_data$ccc_mile <- input$ccc_mile
+          ccc_data$ccc_mile <- input$ccc_mile %||% "1"  # Default to acceptable if not specified
+          message("Using original milestone completion status: ", ccc_data$ccc_mile)
         }
       }
       
       # Add milestone concerns/changes comments
-      if (!is.null(input$ccc_mile_concerns) && input$ccc_mile_concerns != "") {
+      if (!is.null(input$ccc_mile_concerns) && trimws(input$ccc_mile_concerns) != "") {
         if (milestone_edits_made) {
-          ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
+          ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", trimws(input$ccc_mile_concerns))
         } else {
-          ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
+          ccc_data$ccc_mile_notes <- trimws(input$ccc_mile_concerns)
         }
+        message("Milestone notes added")
       }
       
       # Add general comments if provided
-      if (!is.null(input$ccc_comments) && input$ccc_comments != "") {
-        ccc_data$ccc_comments <- input$ccc_comments
+      if (!is.null(input$ccc_comments) && trimws(input$ccc_comments) != "") {
+        ccc_data$ccc_comments <- trimws(input$ccc_comments)
+        message("General comments added")
       }
       
       # Set completion status
       ccc_data$ccc_review_complete <- "2"  # 2 = Complete
+      
+      # Debug: Show all fields being submitted
+      message("=== CCC Data Being Submitted ===")
+      for (field in names(ccc_data)) {
+        value <- ccc_data[[field]]
+        if (nchar(as.character(value)) > 50) {
+          message(field, ": ", substr(value, 1, 50), "...")
+        } else {
+          message(field, ": ", value)
+        }
+      }
+      message("=== End CCC Data ===")
       
       # Build JSON data for REDCap submission
       json_data <- paste0(
