@@ -531,7 +531,7 @@ get_milestone_desc_fields <- function() {
   ))
 }
 
-#' Submit milestone data to REDCap - UPDATED for milestone module integration
+' Submit milestone data to REDCap - FIXED for proper period mapping
 #'
 #' @param redcap_url REDCap API URL
 #' @param redcap_token REDCap API token
@@ -557,13 +557,49 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
   # Convert record_id to character
   record_id <- as.character(record_id)
   
-  # UPDATED: Use the existing map_period_format function for consistency
+  # FIXED: Map period to both instance AND prog_mile_period correctly
+  message("Mapping period: ", selected_period, " with level: ", resident_level)
+  
+  # Get instance number for the repeating instrument
   instance_number <- map_period_format(
     level = resident_level,
     period = selected_period,
     return_type = "instance",
     form_context = "milestone"
   )
+  
+  # CRITICAL FIX: Map to prog_mile_period value (different from instance!)
+  # prog_mile_period should match the milestone period mapping
+  prog_mile_period_value <- map_period_format(
+    level = resident_level,
+    period = selected_period,
+    return_type = "instance",  # This gives us the correct period number
+    form_context = "milestone"
+  )
+  
+  # For some periods, the prog_mile_period might be different from instance
+  # Let's create a specific mapping for prog_mile_period
+  prog_mile_period_mapping <- c(
+    "Mid Intern" = "1",
+    "End Intern" = "2",
+    "Mid PGY2" = "3", 
+    "End PGY2" = "4",
+    "Mid PGY3" = "5",
+    "Graduation" = "6",
+    "Graduating" = "6",
+    "Intern Intro" = "7"
+  )
+  
+  # Map the selected_period to milestone period first
+  milestone_period <- map_to_milestone_period(resident_level, selected_period, "milestone")
+  
+  if (!is.null(milestone_period) && milestone_period %in% names(prog_mile_period_mapping)) {
+    prog_mile_period_value <- prog_mile_period_mapping[milestone_period]
+    message("Using prog_mile_period: ", prog_mile_period_value, " for milestone period: ", milestone_period)
+  } else {
+    message("Could not map to prog_mile_period, using instance number: ", instance_number)
+    prog_mile_period_value <- instance_number
+  }
   
   if (is.na(instance_number) || is.null(instance_number)) {
     return(list(
@@ -573,7 +609,7 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
     ))
   }
   
-  message("Using instance number: ", instance_number, " for milestone submission")
+  message("Using instance number: ", instance_number, " and prog_mile_period: ", prog_mile_period_value)
   
   # Format today's date properly for REDCap as YYYY-MM-DD
   today_date <- format(Sys.Date(), "%Y-%m-%d")
@@ -581,7 +617,7 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
   # Build fields list with all milestone data
   fields <- list(
     prog_mile_date = today_date,
-    prog_mile_period = as.character(instance_number)
+    prog_mile_period = as.character(prog_mile_period_value)  # FIXED: Use the correct mapping
   )
   
   # Add milestone scores - the module returns them with the correct field names
@@ -596,6 +632,74 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
       desc_field <- paste0(key, "_desc")
       fields[[desc_field]] <- as.character(milestone_desc[[key]])
     }
+  }
+  
+  # IMPORTANT: Get existing milestone data to preserve unchanged values
+  message("Retrieving existing milestone data to preserve unchanged values...")
+  
+  # Get existing data for this record and instance
+  existing_response <- tryCatch({
+    httr::POST(
+      url = redcap_url,
+      body = list(
+        token = redcap_token,
+        content = "record",
+        action = "export",
+        format = "json",
+        type = "flat",
+        records = as.character(record_id),
+        forms = "milestone_entry",
+        returnFormat = "json"
+      ),
+      encode = "form",
+      httr::timeout(30)
+    )
+  }, error = function(e) {
+    message("Error retrieving existing data: ", e$message)
+    return(NULL)
+  })
+  
+  # Parse existing data and merge with new data
+  if (!is.null(existing_response) && httr::status_code(existing_response) == 200) {
+    existing_content <- httr::content(existing_response, "text", encoding = "UTF-8")
+    
+    tryCatch({
+      existing_data <- jsonlite::fromJSON(existing_content)
+      
+      # Find the record for this specific instance
+      if (is.data.frame(existing_data) && nrow(existing_data) > 0) {
+        matching_row <- existing_data[
+          existing_data$record_id == record_id & 
+            existing_data$redcap_repeat_instrument == "milestone_entry" &
+            existing_data$redcap_repeat_instance == instance_number, 
+        ]
+        
+        if (nrow(matching_row) > 0) {
+          message("Found existing milestone data for this instance, preserving unchanged values")
+          
+          # Get all milestone field names that we're NOT updating
+          all_milestone_fields <- c(
+            "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
+            "rep_mk1", "rep_mk2", "rep_mk3", "rep_sbp1", "rep_sbp2", "rep_sbp3",
+            "rep_pbl1", "rep_pbl2", "rep_prof1", "rep_prof2", "rep_prof3", 
+            "rep_prof4", "rep_ics1", "rep_ics2", "rep_ics3"
+          )
+          
+          # Add existing values for fields we're not updating
+          for (field in all_milestone_fields) {
+            if (!(field %in% names(milestone_scores)) && field %in% names(matching_row)) {
+              existing_value <- matching_row[[field]][1]
+              if (!is.null(existing_value) && !is.na(existing_value) && existing_value != "") {
+                fields[[field]] <- as.character(existing_value)
+                message("Preserving existing value for ", field, ": ", existing_value)
+              }
+            }
+          }
+        }
+      }
+    }, error = function(e) {
+      message("Error parsing existing data, proceeding with new data only: ", e$message)
+    })
   }
   
   # Build JSON manually for the milestone_entry instrument

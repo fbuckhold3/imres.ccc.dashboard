@@ -370,13 +370,21 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
     output$sbp_pbl_milestones <- render_milestone_section("sbp_pbl")
     output$prof_ics_milestones <- render_milestone_section("prof_ics")
     
-    # Handle milestone selection changes
     observe({
       all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
       
       for (key in all_milestone_keys) {
         local({
           key_local <- key
+          
+          # Find which section this milestone belongs to
+          milestone_name <- NULL
+          for (section_name in names(milestones)) {
+            if (key_local %in% names(milestones[[section_name]]$items)) {
+              milestone_name <- milestones[[section_name]]$items[[key_local]]
+              break
+            }
+          }
           
           # Update selection status
           observeEvent(input[[paste0("select_", key_local)]], {
@@ -396,9 +404,13 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
             }
           }, ignoreInit = TRUE)
           
-          # Handle info button clicks for milestone images
+          # FIXED: Handle info button clicks for milestone images
           observeEvent(input[[paste0("info_", key_local)]], {
-            show_milestone_info(key_local, section$items[[key_local]])
+            if (!is.null(milestone_name)) {
+              show_milestone_info(key_local, milestone_name)
+            } else {
+              show_milestone_info(key_local, key_local)  # Fallback to key name
+            }
           })
         })
       }
@@ -443,7 +455,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       ))
     }
     
-    # Helper function to create milestone level guide
+    # FIXED: Helper function to create milestone level guide
     create_milestone_level_guide <- function() {
       div(
         class = "alert alert-light",
