@@ -632,26 +632,25 @@ ensure_data_loaded <- function() {
   return(app_data_store)
 }
 
-setup_imres_resources <- function() {
-  if (dir.exists(system.file("www", package = "imres"))) {
-    message("Found imres www directory at: ", system.file("www", package = "imres"))
+setup_local_milestones <- function() {
+  # Check if local milestones directory exists
+  if (dir.exists("www/milestones")) {
+    message("Found local milestones directory: www/milestones")
     
-    # Use shiny namespace to call addResourcePath
-    shiny::addResourcePath("imres", system.file("www", package = "imres"))
+    # Tell Shiny to serve files from www/milestones as /milestones
+    shiny::addResourcePath("milestones", "www/milestones")
     
-    # Check for milestones subdirectory  
-    milestones_path <- system.file("www", "milestones", package = "imres")
-    if (dir.exists(milestones_path)) {
-      message("Successfully set up imres-milestones resource path")
-    } else {
-      message("Note: No milestones subdirectory found in imres package (expected at inst/www/milestones/)")
-      message("Milestone images will show placeholder content instead")
-    }
+    # List available images
+    available_images <- list.files("www/milestones", pattern = "\\.png$")
+    message("Available milestone images: ", paste(available_images, collapse = ", "))
+    
+    return(TRUE)
   } else {
-    warning("Could not find imres www directory")
+    message("Local milestones directory not found: www/milestones")
+    return(FALSE)
   }
 }
 
-# Call this function when the app starts
-setup_imres_resources()
+# Call this function at the end of your global.R file
+milestone_images_available <- setup_local_milestones()
 

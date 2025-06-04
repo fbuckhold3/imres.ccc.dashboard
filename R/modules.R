@@ -43,7 +43,7 @@ MILESTONE_DEFINITIONS <- list(
 )
 
 # ============================================================================
-# HELPER FUNCTIONS - MOVED OUTSIDE FUNCTION SCOPE
+# HELPER FUNCTIONS - ALL MOVED OUTSIDE FUNCTION SCOPE
 # ============================================================================
 
 # Helper function to get correct milestone title by key
@@ -99,7 +99,7 @@ create_milestone_level_guide <- function() {
   )
 }
 
-# FIXED: Image display function with correct image loading
+# MOVED TO GLOBAL SCOPE: Image display function with correct image loading
 show_milestone_info <- function(milestone_key, milestone_name) {
   
   # Map milestone field names to image filenames
@@ -123,15 +123,11 @@ show_milestone_info <- function(milestone_key, milestone_name) {
       div(
         style = "text-align: center; margin-bottom: 20px;",
         h5(milestone_name, style = "color: #007bff; margin-bottom: 15px;"),
-        # FIXED: Direct image tag instead of JavaScript
+        # FIXED: Use tags$img() instead of img()
         tags$img(
           src = paste0("milestones/", image_filename, ".png"), 
           style = "max-width: 100%; max-height: 500px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
-          alt = paste("Milestone image for", milestone_name),
-          # Add error handling for missing images
-          onerror = paste0("this.style.display='none'; ",
-                           "this.parentNode.innerHTML='<div class=\"alert alert-warning\">Image not found: ", 
-                           image_filename, ".png</div>';")
+          alt = paste("Milestone image for", milestone_name)
         )
       ),
       hr(),
@@ -175,6 +171,59 @@ show_milestone_info <- function(milestone_key, milestone_name) {
   ))
 }
 
+# MOVED TO GLOBAL SCOPE: Helper function to check image availability
+check_milestone_images <- function() {
+  # Define all milestone keys
+  milestone_keys <- c(
+    "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
+    "rep_mk1", "rep_mk2", "rep_mk3",
+    "rep_sbp1", "rep_sbp2", "rep_sbp3",
+    "rep_pbl1", "rep_pbl2",
+    "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
+    "rep_ics1", "rep_ics2", "rep_ics3"
+  )
+  
+  message("=== Checking Local Milestone Images ===")
+  
+  # Check if local milestones directory exists
+  if (!dir.exists("www/milestones")) {
+    message("❌ Local milestones directory does not exist: www/milestones")
+    return()
+  }
+  
+  found_images <- 0
+  missing_images <- c()
+  
+  for (key in milestone_keys) {
+    # Apply same mapping logic
+    image_filename <- gsub("^rep_", "", key)
+    image_filename <- gsub("^pbl", "pbli", image_filename)
+    
+    local_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
+    
+    if (file.exists(local_path)) {
+      message("✅ Found: ", image_filename, ".png")
+      found_images <- found_images + 1
+    } else {
+      message("❌ Missing: ", image_filename, ".png")
+      missing_images <- c(missing_images, paste0(image_filename, ".png"))
+    }
+  }
+  
+  message("=== Summary ===")
+  message("Found: ", found_images, "/", length(milestone_keys), " images")
+  
+  if (length(missing_images) > 0) {
+    message("Missing images: ", paste(missing_images, collapse = ", "))
+  }
+  
+  return(list(
+    found = found_images,
+    total = length(milestone_keys),
+    missing = missing_images
+  ))
+}
+
 # ============================================================================
 # CCC MILESTONE MODULE
 # ============================================================================
@@ -185,9 +234,6 @@ mod_ccc_miles_ui <- function(id) {
   ns <- NS(id)
   
   tagList(
-    # Your existing CSS and UI code...
-    # (Keep all the CSS from your current version)
-    
     # Selection summary
     div(
       class = "selection-summary",
@@ -277,7 +323,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       return(mapped_data)
     }
     
-    # Initialize milestone data
+    # Initialize milestone data (keep your existing code)
     observe({
       if (!values$data_loaded) {
         all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
@@ -319,7 +365,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
         values$data_loaded <- TRUE
       }
     })
-    
+
     # Render milestone sections with selection checkboxes
     render_milestone_section <- function(section_key) {
       renderUI({
@@ -434,68 +480,6 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       }
     })
 
-    # Also add this helper function to test image availability
-    check_milestone_images <- function() {
-      # Define all milestone keys
-      milestone_keys <- c(
-        "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
-        "rep_mk1", "rep_mk2", "rep_mk3",
-        "rep_sbp1", "rep_sbp2", "rep_sbp3",
-        "rep_pbl1", "rep_pbl2",
-        "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
-        "rep_ics1", "rep_ics2", "rep_ics3"
-      )
-      
-      message("=== Checking Milestone Images ===")
-      
-      found_images <- 0
-      missing_images <- c()
-      
-      for (key in milestone_keys) {
-        # Apply same mapping logic
-        image_filename <- gsub("^rep_", "", key)
-        image_filename <- gsub("^pbl", "pbli", image_filename)
-        
-        img_path <- system.file("www", "milestones", paste0(image_filename, ".png"), package = "imres")
-        
-        if (file.exists(img_path)) {
-          message("✅ Found: ", image_filename, ".png")
-          found_images <- found_images + 1
-        } else {
-          message("❌ Missing: ", image_filename, ".png")
-          missing_images <- c(missing_images, paste0(image_filename, ".png"))
-        }
-      }
-      
-      message("=== Summary ===")
-      message("Found: ", found_images, "/", length(milestone_keys), " images")
-      
-      if (length(missing_images) > 0) {
-        message("Missing images: ", paste(missing_images, collapse = ", "))
-      }
-      
-      return(list(
-        found = found_images,
-        total = length(milestone_keys),
-        missing = missing_images
-      ))
-    }
-    
-    # FIXED: Helper function to create milestone level guide
-    create_milestone_level_guide <- function() {
-      div(
-        class = "alert alert-light",
-        h6("Assessment Levels:"),
-        tags$ul(
-          tags$li(tags$strong("0: "), "Not Assessed"),
-          tags$li(tags$strong("1-2 (Novice): "), "Requires direct supervision"),
-          tags$li(tags$strong("3-4 (Advanced Beginner): "), "Requires some supervision"),
-          tags$li(tags$strong("5-6 (Competent): "), "Can work independently"),
-          tags$li(tags$strong("7-8 (Proficient): "), "Can supervise others"),
-          tags$li(tags$strong("9 (Expert): "), "Exceptional ability, teaches others")
-        )
-      )
-    }
     
     # Selection summary
     output$selection_summary <- renderText({
