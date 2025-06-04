@@ -1249,126 +1249,13 @@ server <- function(input, output, session) {
   # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
   # ============================================================================
   
-  # Replace your existing ccc_submit_button output with this:
-  output$ccc_submit_button <- renderUI({
-    # Check if form is valid for submission
-    can_submit <- TRUE
-    missing_requirements <- character(0)
-    
-    # Basic form requirements
-    if (is.null(input$ccc_rev_type) || input$ccc_rev_type == "") {
-      can_submit <- FALSE
-      missing_requirements <- c(missing_requirements, "Review Type")
-    }
-    
-    # If milestones are marked unacceptable, require milestone selections
-    if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-      # Check if any milestones are selected for editing
-      selected_milestones <- ccc_miles_mod$selected_milestones()
-      has_changes <- ccc_miles_mod$has_changes()
-      
-      if (length(selected_milestones) == 0 || !any(unlist(selected_milestones))) {
-        can_submit <- FALSE
-        missing_requirements <- c(missing_requirements, "Milestone selections")
-      }
-      
-      # Require comments about milestone changes
-      if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
-        can_submit <- FALSE
-        missing_requirements <- c(missing_requirements, "Milestone change comments")
-      }
-    }
-    
-    # If concerns are selected, require action and competency selections
-    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
-        can_submit <- FALSE
-        missing_requirements <- c(missing_requirements, "CCC Actions")
-      }
-      
-      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
-        can_submit <- FALSE
-        missing_requirements <- c(missing_requirements, "Competency Areas")
-      }
-    }
-    
-    # Always require follow-up field (can be "NA")
-    if (is.null(input$ccc_issues_follow_up) || trimws(input$ccc_issues_follow_up) == "") {
-      can_submit <- FALSE
-      missing_requirements <- c(missing_requirements, "Follow-up issues (enter NA if none)")
-    }
-    
-    # Show different button states
-    if (!can_submit) {
-      tagList(
-        div(
-          class = "alert alert-warning mb-3",
-          icon("exclamation-triangle"),
-          " Please complete the following required fields:",
-          tags$ul(
-            lapply(missing_requirements, function(req) tags$li(req))
-          )
-        ),
-        actionButton(
-          "submit_ccc_review",
-          "Complete Requirements First",
-          class = "btn-secondary btn-lg",
-          icon = icon("exclamation-triangle"),
-          disabled = TRUE
-        )
-      )
-    } else {
-      actionButton(
-        "submit_ccc_review",
-        "Submit CCC Review",
-        class = "btn-success btn-lg",
-        icon = icon("save")
-      )
-    }
-  })
-  
-  # Updated CCC submission to handle concern fields
-  observeEvent(input$submit_ccc_review, {
+  observeEvent(input$confirm_submit_ccc, {
     req(values$selected_resident)
+    
+    removeModal()
     
     # Show processing notification
     withProgress(message = "Submitting CCC review...", {
-      
-      # Check if milestone edits were made
-      milestone_edits_made <- FALSE
-      milestone_submission_result <- NULL
-      
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-        # Get selected milestone scores from the enhanced module
-        selected_scores <- ccc_miles_mod$scores()
-        
-        if (length(selected_scores) > 0) {
-          message("Milestone concerns detected, saving ", length(selected_scores), " edited milestones...")
-          
-          # Submit the edited milestone data using your existing function
-          milestone_submission_result <- submit_milestone_data(
-            redcap_url = app_data()$url %||% "https://redcapsurvey.slu.edu/api/",
-            redcap_token = app_data()$rdm_token,
-            record_id = find_record_id(app_data(), values$selected_resident$name),
-            selected_period = values$current_period,
-            resident_level = values$selected_resident$Level,
-            milestone_scores = selected_scores,
-            milestone_desc = list() # Empty for now
-          )
-          
-          if (milestone_submission_result$success) {
-            milestone_edits_made <- TRUE
-            message("Milestone edits saved successfully")
-          } else {
-            showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
-                             type = "error", duration = 10)
-            return()  # Don't proceed with CCC submission if milestone save failed
-          }
-        }
-      }
-      
-      # Continue with your existing CCC submission logic...
-      # (Keep the rest of your existing CCC submission code here)
       
       # Get REDCap connection info
       redcap_url <- app_data()$url %||% "https://redcapsurvey.slu.edu/api/"
@@ -1409,6 +1296,35 @@ server <- function(input, output, session) {
       
       message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
       
+      # Check if milestone edits were made
+      milestone_edits_made <- FALSE
+      milestone_submission_result <- NULL
+      
+      if (!is.null(input$ccc_mile) && input$ccc_mile == "0" && !is.null(ccc_miles_mod$scores())) {
+        # Milestones were marked as unacceptable and edits were made
+        message("Milestone concerns detected, saving edited milestones...")
+        
+        # Submit the edited milestone data
+        milestone_submission_result <- submit_milestone_data(
+          redcap_url = redcap_url,
+          redcap_token = token,
+          record_id = record_id,
+          selected_period = values$current_period,
+          resident_level = values$selected_resident$Level,
+          milestone_scores = ccc_miles_mod$scores(),
+          milestone_desc = ccc_miles_mod$desc()
+        )
+        
+        if (milestone_submission_result$success) {
+          milestone_edits_made <- TRUE
+          message("Milestone edits saved successfully")
+        } else {
+          showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
+                           type = "error", duration = 10)
+          return()  # Don't proceed with CCC submission if milestone save failed
+        }
+      }
+      
       # Build CCC data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
@@ -1417,98 +1333,40 @@ server <- function(input, output, session) {
         ccc_concern = input$ccc_concern
       )
       
-      # NEW: Add CCC comments on ILP
-      if (!is.null(input$ccc_ilp) && trimws(input$ccc_ilp) != "") {
-        ccc_data$ccc_ilp <- trimws(input$ccc_ilp)
-        message("CCC ILP comments added: ", substr(ccc_data$ccc_ilp, 1, 50), "...")
-      }
-      
-      # Add concern-related fields if concerns exist
-      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-        
-        # Validate that required concern fields are filled
-        concern_validation_errors <- character(0)
-        
-        # Actions suggested by CCC (checkbox group) - REQUIRED when concerns = Yes
-        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
-          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
-          message("CCC Actions selected: ", ccc_data$ccc_action)
-        } else {
-          concern_validation_errors <- c(concern_validation_errors, "CCC Actions must be selected when concerns exist")
-        }
-        
-        # Competency areas (checkbox group) - REQUIRED when concerns = Yes
-        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
-          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
-          message("Competency areas selected: ", ccc_data$ccc_competency)
-        } else {
-          concern_validation_errors <- c(concern_validation_errors, "Competency areas must be selected when concerns exist")
-        }
-        
-        # If validation errors exist, stop submission
-        if (length(concern_validation_errors) > 0) {
-          showNotification(
-            paste("Please complete required concern fields:", paste(concern_validation_errors, collapse = "; ")), 
-            type = "error", 
-            duration = 10
-          )
-          return()
-        }
-      }
-      
-      # Issues for follow up - ALWAYS include this field
-      if (!is.null(input$ccc_issues_follow_up) && trimws(input$ccc_issues_follow_up) != "") {
-        ccc_data$ccc_issues_follow_up <- trimws(input$ccc_issues_follow_up)
-        message("Follow-up issues: ", substr(ccc_data$ccc_issues_follow_up, 1, 50), "...")
-      } else {
-        # Default to "NA" if nothing entered
-        ccc_data$ccc_issues_follow_up <- "NA"
-        message("No follow-up issues specified, using 'NA'")
+      # Add concern details if concerns were indicated
+      if (!is.null(input$ccc_concern) && input$ccc_concern == "1" && 
+          !is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
+        ccc_data$ccc_concern_details <- input$ccc_concern_details
       }
       
       # Add milestone completion - update based on whether edits were made
-      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+      if (input$ccc_rev_type == "1") {
         if (milestone_edits_made) {
           # If edits were made, mark milestones as now acceptable
           ccc_data$ccc_mile <- "1"  # Yes - now acceptable after edits
-          message("Milestones marked as acceptable after edits")
         } else {
           # Use the original input value
-          ccc_data$ccc_mile <- input$ccc_mile %||% "1"  # Default to acceptable if not specified
-          message("Using original milestone completion status: ", ccc_data$ccc_mile)
+          ccc_data$ccc_mile <- input$ccc_mile
         }
       }
       
       # Add milestone concerns/changes comments
-      if (!is.null(input$ccc_mile_concerns) && trimws(input$ccc_mile_concerns) != "") {
+      if (!is.null(input$ccc_mile_concerns) && input$ccc_mile_concerns != "") {
         if (milestone_edits_made) {
-          ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", trimws(input$ccc_mile_concerns))
+          ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
         } else {
-          ccc_data$ccc_mile_notes <- trimws(input$ccc_mile_concerns)
+          ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
         }
-        message("Milestone notes added")
       }
       
-      # Add general comments if provided
-      if (!is.null(input$ccc_comments) && trimws(input$ccc_comments) != "") {
-        ccc_data$ccc_comments <- trimws(input$ccc_comments)
-        message("General comments added")
+      # NEW: Add additional comments if provided
+      if (!is.null(input$ccc_has_additional_comments) && input$ccc_has_additional_comments == "1" &&
+          !is.null(input$ccc_comments) && input$ccc_comments != "") {
+        ccc_data$ccc_comments <- input$ccc_comments
       }
       
       # Set completion status
       ccc_data$ccc_review_complete <- "2"  # 2 = Complete
-      
-      # Debug: Show all fields being submitted
-      message("=== CCC Data Being Submitted ===")
-      for (field in names(ccc_data)) {
-        value <- ccc_data[[field]]
-        if (nchar(as.character(value)) > 50) {
-          message(field, ": ", substr(value, 1, 50), "...")
-        } else {
-          message(field, ": ", value)
-        }
-      }
-      message("=== End CCC Data ===")
       
       # Build JSON data for REDCap submission
       json_data <- paste0(
@@ -1547,7 +1405,7 @@ server <- function(input, output, session) {
         encode = "form"
       )
       
-      # Process response
+      # Process response (existing logic continues...)
       status_code <- httr::status_code(response)
       content_text <- httr::content(response, "text", encoding = "UTF-8")
       
@@ -1569,13 +1427,8 @@ server <- function(input, output, session) {
           
           if (!is.na(records_updated) && records_updated > 0) {
             # Show success message
-            success_msg <- if (milestone_edits_made) {
-              paste("CCC review and milestone edits successfully submitted! (", records_updated, " record updated)")
-            } else {
-              paste("CCC review successfully submitted! (", records_updated, " record updated)")
-            }
-            
-            showNotification(success_msg, type = "message", duration = 5)
+            showNotification(paste("CCC review successfully submitted! (", records_updated, " record updated)"), 
+                             type = "message", duration = 5)
             
             # Navigate back to dashboard
             shinyjs::hide("ccc-review-pages")
@@ -1596,14 +1449,8 @@ server <- function(input, output, session) {
         }, error = function(e) {
           # JSON parsing error - but if we got here with status 200, it probably worked
           message("Parse error but status 200, assuming success: ", e$message)
-          
-          success_msg <- if (milestone_edits_made) {
-            "CCC review and milestone edits submitted successfully!"
-          } else {
-            "CCC review submitted successfully!"
-          }
-          
-          showNotification(success_msg, type = "message", duration = 5)
+          showNotification("CCC review submitted successfully!", 
+                           type = "message", duration = 5)
           
           # Navigate back to dashboard anyway since we got HTTP 200
           shinyjs::hide("ccc-review-pages")
@@ -1622,6 +1469,89 @@ server <- function(input, output, session) {
                          type = "error", duration = 10)
       }
     })
+  })
+  
+  # Update the submit button validation logic
+  output$ccc_submit_button <- renderUI({
+    # Check if form is valid for submission
+    can_submit <- TRUE
+    validation_messages <- character(0)
+    
+    # Check if review type is selected
+    if (is.null(input$ccc_rev_type) || input$ccc_rev_type == "") {
+      can_submit <- FALSE
+      validation_messages <- c(validation_messages, "Please select a review type")
+    }
+    
+    # For scheduled reviews, check session selection
+    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+      if (is.null(input$ccc_session) || input$ccc_session == "") {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please select a review session")
+      }
+    }
+    
+    # Check if concerns are addressed
+    if (is.null(input$ccc_concern) || input$ccc_concern == "") {
+      can_submit <- FALSE
+      validation_messages <- c(validation_messages, "Please indicate if there are concerns")
+    }
+    
+    # If concerns = Yes, require details
+    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+      if (is.null(input$ccc_concern_details) || trimws(input$ccc_concern_details) == "") {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please describe the concerns")
+      }
+    }
+    
+    # For scheduled reviews, check milestones
+    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+      if (is.null(input$ccc_mile) || input$ccc_mile == "") {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please indicate if milestones are acceptable")
+      }
+      
+      # If milestones not acceptable, require edits and comments
+      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+        if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+          can_submit <- FALSE
+          validation_messages <- c(validation_messages, "Please edit the milestone assessments")
+        }
+        if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
+          can_submit <- FALSE
+          validation_messages <- c(validation_messages, "Please comment on milestone changes")
+        }
+      }
+    }
+    
+    # Check additional comments requirement
+    if (!is.null(input$ccc_has_additional_comments) && input$ccc_has_additional_comments == "1") {
+      if (is.null(input$ccc_comments) || trimws(input$ccc_comments) == "") {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please provide additional comments")
+      }
+    }
+    
+    tagList(
+      if (length(validation_messages) > 0) {
+        div(
+          class = "alert alert-warning mb-3",
+          tags$strong("Please complete the following:"),
+          tags$ul(
+            lapply(validation_messages, function(msg) tags$li(msg))
+          )
+        )
+      },
+      
+      actionButton(
+        "submit_ccc_review",
+        "Submit CCC Review",
+        class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
+        icon = icon("save"),
+        disabled = !can_submit
+      )
+    )
   })
   
 } # End of server function
