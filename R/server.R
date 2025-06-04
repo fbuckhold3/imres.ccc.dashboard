@@ -1203,6 +1203,131 @@ server <- function(input, output, session) {
     }
   })
   
+  output$secondary_review_display <- renderUI({
+    req(values$selected_resident)
+    req(values$current_period)
+    
+    # Get resident data
+    resident_data <- processed_resident_data()
+    
+    # Get REDCap instance number for the current period
+    current_app_period <- get_current_period()
+    instance <- map_period_format(
+      level = values$selected_resident$Level,
+      period = current_app_period,
+      return_type = "instance"
+    )
+    
+    # Try to find existing secondary review data
+    filtered_data <- resident_data %>%
+      filter(name == values$selected_resident$name)
+    
+    # Look for existing second review data
+    existing_approval <- NULL
+    existing_comments <- NULL
+    existing_source <- "Not specified"
+    
+    if ("second_period" %in% names(filtered_data)) {
+      period_rows <- filtered_data %>%
+        filter(second_period == as.character(instance))
+      
+      if (nrow(period_rows) > 0) {
+        # Get existing data for this specific period
+        if ("second_approve" %in% names(period_rows) && !is.na(period_rows$second_approve[1])) {
+          existing_approval <- ifelse(period_rows$second_approve[1] == "1", "Approved", "Not Approved")
+          existing_source <- "Current period secondary review"
+        }
+        
+        if ("second_comments" %in% names(period_rows) && !is.na(period_rows$second_comments[1])) {
+          existing_comments <- period_rows$second_comments[1]
+          if (existing_source == "Not specified") {
+            existing_source <- "Current period secondary review"
+          }
+        }
+      }
+    }
+    
+    # If no current period data, try any existing secondary review data
+    if (is.null(existing_approval) && is.null(existing_comments)) {
+      # Try second_rev field (from your original working code)
+      if ("second_rev" %in% names(filtered_data)) {
+        for (i in 1:nrow(filtered_data)) {
+          if (!is.na(filtered_data$second_rev[i]) && filtered_data$second_rev[i] != "") {
+            existing_comments <- filtered_data$second_rev[i]
+            existing_source <- "Secondary reviewer notes"
+            break
+          }
+        }
+      }
+      
+      # Try any second_comments field
+      if (is.null(existing_comments) && "second_comments" %in% names(filtered_data)) {
+        for (i in 1:nrow(filtered_data)) {
+          if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
+            existing_comments <- filtered_data$second_comments[i]
+            existing_source <- "Most recent secondary review"
+            break
+          }
+        }
+      }
+    }
+    
+    # Create the display
+    if (!is.null(existing_approval) || !is.null(existing_comments)) {
+      # We have some data to display
+      div(
+        # Source indicator
+        tags$small(
+          class = "text-muted mb-2 d-block",
+          tags$strong("Source: "), existing_source
+        ),
+        
+        # Approval status (if available)
+        if (!is.null(existing_approval)) {
+          div(
+            class = "mb-2",
+            tags$strong("Status: "),
+            span(
+              existing_approval,
+              class = if(existing_approval == "Approved") "text-success" else "text-warning"
+            )
+          )
+        },
+        
+        # Comments (if available)
+        if (!is.null(existing_comments)) {
+          div(
+            class = "secondary-review-text",
+            tags$strong("Comments:"),
+            div(
+              style = "
+              background-color: #ffffff;
+              border: 1px solid #dee2e6;
+              border-radius: 4px;
+              padding: 10px;
+              margin-top: 5px;
+              line-height: 1.5;
+              max-height: 200px;
+              overflow-y: auto;
+            ",
+              # Split into paragraphs for better readability
+              lapply(strsplit(existing_comments, "\n\n")[[1]], function(para) {
+                if (para != "") tags$p(para, style = "margin-bottom: 8px;")
+              })
+            )
+          )
+        }
+      )
+    } else {
+      # No data found
+      div(
+        class = "text-muted text-center p-3",
+        icon("info-circle", class = "mb-2"),
+        tags$p("No secondary review data available for this resident.")
+      )
+    }
+  })
+  
   # ============================================================================
   # UPDATED CCC MILESTONE EDITING MODULE INTEGRATION
   # ============================================================================
@@ -1329,18 +1454,47 @@ server <- function(input, output, session) {
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
-        ccc_session = ccc_session_value,
         ccc_concern = input$ccc_concern
       )
       
-      # Add concern details if concerns were indicated
-      if (!is.null(input$ccc_concern) && input$ccc_concern == "1" && 
-          !is.null(input$ccc_concern_details) && input$ccc_concern_details != "") {
-        ccc_data$ccc_concern_details <- input$ccc_concern_details
+      # Add session for scheduled reviews
+      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+        ccc_data$ccc_session = ccc_session_value
       }
       
-      # Add milestone completion - update based on whether edits were made
-      if (input$ccc_rev_type == "1") {
+      # Add interim notes for interim reviews
+      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "2") {
+        if (!is.null(input$ccc_interim) && input$ccc_interim != "") {
+          ccc_data$ccc_interim <- input$ccc_interim
+        }
+      }
+      
+      # Add concern-related fields if concerns were indicated
+      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+        # Add actions if selected
+        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
+          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
+        }
+        
+        # Add competency areas if selected
+        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
+          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
+        }
+      }
+      
+      # Add scheduled review specific fields
+      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+        # Add ILP comments if provided
+        if (!is.null(input$ccc_ilp) && input$ccc_ilp != "") {
+          ccc_data$ccc_ilp <- input$ccc_ilp
+        }
+        
+        # Add follow-up actions if provided
+        if (!is.null(input$ccc_issues_follow_up) && input$ccc_issues_follow_up != "") {
+          ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
+        }
+        
+        # Add milestone completion - update based on whether edits were made
         if (milestone_edits_made) {
           # If edits were made, mark milestones as now acceptable
           ccc_data$ccc_mile <- "1"  # Yes - now acceptable after edits
@@ -1348,21 +1502,20 @@ server <- function(input, output, session) {
           # Use the original input value
           ccc_data$ccc_mile <- input$ccc_mile
         }
-      }
-      
-      # Add milestone concerns/changes comments
-      if (!is.null(input$ccc_mile_concerns) && input$ccc_mile_concerns != "") {
-        if (milestone_edits_made) {
-          ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
-        } else {
-          ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
+        
+        # Add milestone concerns/changes comments
+        if (!is.null(input$ccc_mile_concerns) && input$ccc_mile_concerns != "") {
+          if (milestone_edits_made) {
+            ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
+          } else {
+            ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
+          }
         }
-      }
-      
-      # NEW: Add additional comments if provided
-      if (!is.null(input$ccc_has_additional_comments) && input$ccc_has_additional_comments == "1" &&
-          !is.null(input$ccc_comments) && input$ccc_comments != "") {
-        ccc_data$ccc_comments <- input$ccc_comments
+        
+        # Add additional comments if provided
+        if (!is.null(input$ccc_comments) && input$ccc_comments != "") {
+          ccc_data$ccc_comments <- input$ccc_comments
+        }
       }
       
       # Set completion status
@@ -1483,53 +1636,61 @@ server <- function(input, output, session) {
       validation_messages <- c(validation_messages, "Please select a review type")
     }
     
-    # For scheduled reviews, check session selection
+    # SCHEDULED REVIEW VALIDATION
     if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+      # For scheduled reviews, check session selection
       if (is.null(input$ccc_session) || input$ccc_session == "") {
         can_submit <- FALSE
         validation_messages <- c(validation_messages, "Please select a review session")
       }
+      
+      # Check milestones for scheduled reviews (EXCEPT Intern Intro)
+      if (!is.null(input$ccc_session) && input$ccc_session != "7") {
+        if (is.null(input$ccc_mile) || input$ccc_mile == "") {
+          can_submit <- FALSE
+          validation_messages <- c(validation_messages, "Please indicate if milestones are acceptable")
+        }
+        
+        # If milestones not acceptable, require edits and comments
+        if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+          if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please edit the milestone assessments")
+          }
+          if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please comment on milestone changes")
+          }
+        }
+      }
+      # For Intern Intro (session = "7"), no milestone validation needed
     }
     
+    # INTERIM REVIEW VALIDATION
+    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "2") {
+      # For interim reviews, require interim notes
+      if (is.null(input$ccc_interim) || trimws(input$ccc_interim) == "") {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please provide interim review notes")
+      }
+    }
+    
+    # COMMON VALIDATION (for all review types)
     # Check if concerns are addressed
     if (is.null(input$ccc_concern) || input$ccc_concern == "") {
       can_submit <- FALSE
       validation_messages <- c(validation_messages, "Please indicate if there are concerns")
     }
     
-    # If concerns = Yes, require details
+    # If concerns = Yes, require action selection
     if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-      if (is.null(input$ccc_concern_details) || trimws(input$ccc_concern_details) == "") {
+      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
         can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please describe the concerns")
+        validation_messages <- c(validation_messages, "Please select at least one CCC action")
       }
-    }
-    
-    # For scheduled reviews, check milestones
-    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
-      if (is.null(input$ccc_mile) || input$ccc_mile == "") {
+      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
         can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please indicate if milestones are acceptable")
-      }
-      
-      # If milestones not acceptable, require edits and comments
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-        if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
-          can_submit <- FALSE
-          validation_messages <- c(validation_messages, "Please edit the milestone assessments")
-        }
-        if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
-          can_submit <- FALSE
-          validation_messages <- c(validation_messages, "Please comment on milestone changes")
-        }
-      }
-    }
-    
-    # Check additional comments requirement
-    if (!is.null(input$ccc_has_additional_comments) && input$ccc_has_additional_comments == "1") {
-      if (is.null(input$ccc_comments) || trimws(input$ccc_comments) == "") {
-        can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please provide additional comments")
+        validation_messages <- c(validation_messages, "Please select at least one competency area")
       }
     }
     

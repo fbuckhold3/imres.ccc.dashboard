@@ -632,25 +632,68 @@ ensure_data_loaded <- function() {
   return(app_data_store)
 }
 
-setup_local_milestones <- function() {
-  # Check if local milestones directory exists
-  if (dir.exists("www/milestones")) {
-    message("Found local milestones directory: www/milestones")
+# Add this to your global.R file after your existing setup
+
+# ---------- MILESTONE IMAGES SETUP ----------
+
+# Function to detect if running on Posit Connect
+is_posit_connect <- function() {
+  return(
+    Sys.getenv("CONNECT_SERVER") != "" || 
+      Sys.getenv("SHINY_PORT") != "" ||
+      Sys.getenv("R_CONFIG_ACTIVE") == "rsconnect" ||
+      Sys.getenv("RSTUDIO_PROGRAM_MODE") == "server"
+  )
+}
+
+# Setup milestone images (replaces your current setup_local_milestones function)
+setup_milestone_images <- function() {
+  message("=== Setting up milestone images ===")
+  
+  # Always check local directory first
+  local_available <- dir.exists("www/milestones")
+  
+  if (local_available) {
+    message("✓ Found local milestones directory: www/milestones")
     
     # Tell Shiny to serve files from www/milestones as /milestones
     shiny::addResourcePath("milestones", "www/milestones")
     
     # List available images
     available_images <- list.files("www/milestones", pattern = "\\.png$")
-    message("Available milestone images: ", paste(available_images, collapse = ", "))
+    message("Available local milestone images: ", length(available_images), " files")
+    message("Sample images: ", paste(head(available_images, 3), collapse = ", "))
     
-    return(TRUE)
+    # If we're on Posit Connect but have local images, that's ideal
+    if (is_posit_connect()) {
+      message("ℹ️  Running on Posit Connect with local images available")
+    } else {
+      message("ℹ️  Running locally with local images")
+    }
+    
+    return(list(
+      local = TRUE, 
+      count = length(available_images),
+      environment = if(is_posit_connect()) "posit_connect" else "local"
+    ))
   } else {
-    message("Local milestones directory not found: www/milestones")
-    return(FALSE)
+    message("❌ Local milestones directory not found: www/milestones")
+    
+    if (is_posit_connect()) {
+      message("ℹ️  Running on Posit Connect - will use GitHub images")
+      message("GitHub base URL: https://raw.githubusercontent.com/fbuckhold3/imres.ccc.dashboard/main/www/milestones/")
+    } else {
+      message("⚠️  Running locally without local images - will use GitHub images")
+    }
+    
+    return(list(
+      local = FALSE, 
+      count = 0,
+      environment = if(is_posit_connect()) "posit_connect" else "local",
+      github_url = "https://raw.githubusercontent.com/fbuckhold3/imres.ccc.dashboard/main/www/milestones/"
+    ))
   }
 }
 
-# Call this function at the end of your global.R file
-milestone_images_available <- setup_local_milestones()
-
+# Call this function and store the result
+milestone_images_config <- setup_milestone_images()

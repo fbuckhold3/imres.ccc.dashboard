@@ -99,7 +99,7 @@ create_milestone_level_guide <- function() {
   )
 }
 
-# MOVED TO GLOBAL SCOPE: Image display function with correct image loading
+# Updated show_milestone_info function with GitHub support for fbuckhold3/imres.ccc.dashboard
 show_milestone_info <- function(milestone_key, milestone_name) {
   
   # Map milestone field names to image filenames
@@ -110,54 +110,64 @@ show_milestone_info <- function(milestone_key, milestone_name) {
   
   message("Looking for milestone image: '", image_filename, ".png' (from field: '", milestone_key, "')")
   
-  # Check for image in LOCAL www/milestones directory
+  # Check for LOCAL image first (for development)
   local_img_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
-  img_exists <- file.exists(local_img_path)
+  img_exists_locally <- file.exists(local_img_path)
+  
+  # GitHub raw URL for your repository
+  github_img_url <- paste0(
+    "https://raw.githubusercontent.com/fbuckhold3/imres.ccc.dashboard/main/www/milestones/",
+    image_filename, ".png"
+  )
   
   message("Local image path: ", local_img_path)
-  message("Local image exists: ", img_exists)
+  message("Local image exists: ", img_exists_locally)
+  message("GitHub image URL: ", github_img_url)
   
-  modal_content <- if (img_exists) {
-    message("✅ Found local milestone image for ", milestone_key)
-    tagList(
-      div(
-        style = "text-align: center; margin-bottom: 20px;",
-        h5(milestone_name, style = "color: #007bff; margin-bottom: 15px;"),
-        # FIXED: Use tags$img() instead of img()
-        tags$img(
-          src = paste0("milestones/", image_filename, ".png"), 
-          style = "max-width: 100%; max-height: 500px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
-          alt = paste("Milestone image for", milestone_name)
-        )
-      ),
-      hr(),
-      create_milestone_level_guide()
-    )
+  # Determine which image source to use
+  img_src <- if (img_exists_locally) {
+    # Use local image (development)
+    paste0("milestones/", image_filename, ".png")
   } else {
-    message("❌ No local milestone image found for ", milestone_key, " (looking for: '", image_filename, ".png')")
-    tagList(
-      div(
-        class = "alert alert-info",
-        h5(icon("info-circle"), " Milestone Information"),
-        h6(milestone_name, style = "color: #007bff; font-weight: 600;"),
-        p("This milestone assesses specific competencies related to internal medicine practice."),
-        p(paste("Expected image file: www/milestones/", image_filename, ".png", sep=""), 
-          class = "text-muted small"),
-        
-        # Instructions for adding images
-        div(
-          class = "mt-3 p-3 bg-light rounded border",
-          h6("To add milestone images:", class = "text-primary"),
-          tags$ol(
-            tags$li("Create directory: ", tags$code("www/milestones/")),
-            tags$li("Add image file: ", tags$code(paste0(image_filename, ".png"))),
-            tags$li("Refresh the app")
-          )
+    # Use GitHub image (production/deployment)
+    github_img_url
+  }
+  
+  modal_content <- tagList(
+    div(
+      style = "text-align: center; margin-bottom: 20px;",
+      h5(milestone_name, style = "color: #007bff; margin-bottom: 15px;"),
+      
+      # Image with error handling
+      tags$img(
+        src = img_src,
+        style = "max-width: 100%; max-height: 500px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
+        alt = paste("Milestone image for", milestone_name),
+        onerror = paste0(
+          "console.log('Image failed to load:', this.src); ",
+          "this.style.display='none'; ",
+          "this.nextElementSibling.style.display='block';"
         )
       ),
-      create_milestone_level_guide()
-    )
-  }
+      
+      # Fallback message (hidden by default)
+      div(
+        id = paste0("fallback_", gsub("[^A-Za-z0-9]", "_", milestone_key)),
+        style = "display: none; padding: 20px; background-color: #f8f9fa; border-radius: 4px; margin-top: 10px;",
+        class = "alert alert-info",
+        h6("Image not available", class = "text-primary"),
+        p("The milestone image could not be loaded from either local or GitHub sources."),
+        tags$small(
+          class = "text-muted",
+          paste("Expected image:", image_filename, ".png"),
+          br(),
+          paste("GitHub URL:", github_img_url)
+        )
+      )
+    ),
+    hr(),
+    create_milestone_level_guide()
+  )
   
   showModal(modalDialog(
     title = div(
@@ -171,7 +181,7 @@ show_milestone_info <- function(milestone_key, milestone_name) {
   ))
 }
 
-# MOVED TO GLOBAL SCOPE: Helper function to check image availability
+# Updated check_milestone_images function with GitHub support
 check_milestone_images <- function() {
   # Define all milestone keys
   milestone_keys <- c(
@@ -183,44 +193,88 @@ check_milestone_images <- function() {
     "rep_ics1", "rep_ics2", "rep_ics3"
   )
   
-  message("=== Checking Local Milestone Images ===")
+  message("=== Checking Milestone Images ===")
   
   # Check if local milestones directory exists
-  if (!dir.exists("www/milestones")) {
+  local_available <- dir.exists("www/milestones")
+  
+  if (local_available) {
+    message("✓ Local milestones directory exists: www/milestones")
+    
+    # Tell Shiny to serve files from www/milestones as /milestones
+    shiny::addResourcePath("milestones", "www/milestones")
+    
+    found_images <- 0
+    missing_images <- c()
+    
+    for (key in milestone_keys) {
+      # Apply same mapping logic as show_milestone_info
+      image_filename <- gsub("^rep_", "", key)
+      image_filename <- gsub("^pbl", "pbli", image_filename)
+      
+      local_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
+      
+      if (file.exists(local_path)) {
+        message("✓ Found: ", image_filename, ".png")
+        found_images <- found_images + 1
+      } else {
+        message("❌ Missing: ", image_filename, ".png")
+        missing_images <- c(missing_images, paste0(image_filename, ".png"))
+      }
+    }
+    
+    message("=== Local Summary ===")
+    message("Found: ", found_images, "/", length(milestone_keys), " images locally")
+    
+    if (length(missing_images) > 0) {
+      message("Missing local images: ", paste(missing_images, collapse = ", "))
+    }
+  } else {
     message("❌ Local milestones directory does not exist: www/milestones")
-    return()
+    message("ℹ️  Will use GitHub images when deployed")
+    found_images <- 0
+    missing_images <- sapply(milestone_keys, function(key) {
+      image_filename <- gsub("^rep_", "", key)
+      image_filename <- gsub("^pbl", "pbli", image_filename)
+      paste0(image_filename, ".png")
+    })
   }
   
-  found_images <- 0
-  missing_images <- c()
+  # Test GitHub accessibility for a few key images
+  message("=== Testing GitHub Image Access ===")
+  test_keys <- head(milestone_keys, 3)  # Test first 3 images
   
-  for (key in milestone_keys) {
-    # Apply same mapping logic
+  github_accessible <- 0
+  for (key in test_keys) {
     image_filename <- gsub("^rep_", "", key)
     image_filename <- gsub("^pbl", "pbli", image_filename)
     
-    local_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
+    github_url <- paste0(
+      "https://raw.githubusercontent.com/fbuckhold3/imres.ccc.dashboard/main/www/milestones/",
+      image_filename, ".png"
+    )
     
-    if (file.exists(local_path)) {
-      message("✅ Found: ", image_filename, ".png")
-      found_images <- found_images + 1
-    } else {
-      message("❌ Missing: ", image_filename, ".png")
-      missing_images <- c(missing_images, paste0(image_filename, ".png"))
-    }
-  }
-  
-  message("=== Summary ===")
-  message("Found: ", found_images, "/", length(milestone_keys), " images")
-  
-  if (length(missing_images) > 0) {
-    message("Missing images: ", paste(missing_images, collapse = ", "))
+    tryCatch({
+      response <- httr::HEAD(github_url, httr::timeout(10))
+      if (httr::status_code(response) == 200) {
+        message("✓ GitHub accessible: ", image_filename, ".png")
+        github_accessible <- github_accessible + 1
+      } else {
+        message("❌ GitHub not accessible: ", image_filename, ".png (status: ", httr::status_code(response), ")")
+      }
+    }, error = function(e) {
+      message("❌ GitHub error for ", image_filename, ".png: ", e$message)
+    })
   }
   
   return(list(
-    found = found_images,
-    total = length(milestone_keys),
-    missing = missing_images
+    local_available = local_available,
+    local_found = found_images,
+    local_total = length(milestone_keys),
+    local_missing = missing_images,
+    github_accessible = github_accessible,
+    github_tested = length(test_keys),
+    github_base_url = "https://raw.githubusercontent.com/fbuckhold3/imres.ccc.dashboard/main/www/milestones/"
   ))
 }
 

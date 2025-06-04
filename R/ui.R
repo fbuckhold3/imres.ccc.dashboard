@@ -202,7 +202,7 @@ ui <- page_fluid(
     ),
     
     # ============================================================================
-    # CCC PAGES
+    # CCC PAGES - COMPLETE STRUCTURE
     # ============================================================================
     div(
       id = "ccc-pages",
@@ -233,7 +233,7 @@ ui <- page_fluid(
             card(
               card_header("Filter Options",
                           `data-card-type` = "filters"
-                          ),
+              ),
               card_body(
                 div(
                   class = "d-flex flex-wrap gap-2 mb-3",
@@ -260,7 +260,7 @@ ui <- page_fluid(
             card(
               card_header("All Residents - ILP and Milestone Review Status",
                           `data-card-type` = "resident-table"
-                          ),
+              ),
               card_body(
                 p(
                   class = "mb-3 text-center fw-bold table-instruction",
@@ -274,226 +274,315 @@ ui <- page_fluid(
       ),
       
       # ============================================================================
-      # CCC REVIEW PAGES (Individual resident review)
+      # CCC REVIEW PAGES (Individual resident review) - RESTORED WORKING VERSION
       # ============================================================================
       div(
         id = "ccc-review-pages",
         style = "display: none;",
         
-        # Resident info panel
         fluidRow(
+          # LEFT COLUMN - Coach ILP Summary, Secondary Review, CCC Comments, and Concerns
           column(
-            width = 12,
-            div(
-              class = "resident-info-panel p-3 bg-light border rounded mb-4",
-              fluidRow(
-                column(2, h5("Resident:", textOutput("display_resident_name", inline = TRUE))),
-                column(2, h5("Level:", textOutput("display_resident_level", inline = TRUE))),
-                column(2, h5("Access Code:", textOutput("display_access_code", inline = TRUE))),
-                column(3, h5("Primary Coach:", textOutput("display_primary_coach", inline = TRUE))),
-                column(3, h5("Period:", textOutput("display_current_period", inline = TRUE)))
+            width = 6,
+            
+            # Coach ILP Summary - ONLY for Scheduled Reviews
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1'",
+              card(
+                card_header("Coach ILP Summary",
+                            `data-card-type` = "coach-ilp"
+                ),
+                card_body(
+                  uiOutput("coach_ilp_summary")
+                )
               ),
-              div(
-                class = "mt-2",
-                actionButton("back_to_dashboard", "← Back to Dashboard", 
-                             class = "btn-secondary btn-sm")
-              )
-            )
-          )
-        ),
-        
-        # Milestone plots
-        fluidRow(
-          column(
-            width = 12,
+              br()
+            ),
+            
+            # Secondary Review Summary - ONLY for Scheduled Reviews
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1'",
+              card(
+                card_header("Secondary Review Summary",
+                            `data-card-type` = "secondary-review"
+                ),
+                card_body(
+                  # Just display the existing secondary review data as text
+                  div(
+                    class = "secondary-review-display",
+                    uiOutput("secondary_review_display")
+                  )
+                )
+              ),
+              br()
+            ),
+            
+            # CCC Comments on ILP - ONLY for Scheduled Reviews
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1'",
+              card(
+                card_header("CCC Comments on ILP",
+                            `data-card-type` = "ccc-ilp"
+                ),
+                card_body(
+                  textAreaInput(
+                    "ccc_ilp",
+                    label = NULL,
+                    rows = 4,
+                    width = "100%",
+                    placeholder = "Enter CCC comments about the resident's ILP (Individual Learning Plan)..."
+                  )
+                )
+              ),
+              br()
+            ),
+            
+            # CCC Concerns and Actions (ALWAYS SHOWN ON LEFT)
             card(
-              card_header("Milestone Assessments",
-                          `data-card-type` = "milestones"
-                          ),
+              card_header("CCC Concerns",
+                          `data-card-type` = "ccc-concerns"
+              ),
               card_body(
-                fluidRow(
-                  column(6, 
-                         h5("Current Self-Assessment"),
-                         plotOutput("self_milestones_plot", height = "400px")
+                # Concerns - matches REDCap ccc_concern field
+                radioButtons(
+                  "ccc_concern",
+                  "Any concerns of the CCC?",
+                  choices = c(
+                    "No" = "0",
+                    "Yes" = "1"
                   ),
-                  column(6, 
-                         h5("Current Program Assessment"),
-                         plotOutput("program_milestones_plot", height = "400px")
+                  selected = character(0)
+                ),
+                
+                # CCC Actions - APPEARS ON LEFT when concerns = Yes
+                conditionalPanel(
+                  condition = "input.ccc_concern == '1'",
+                  div(
+                    class = "alert alert-warning mb-3",
+                    tags$p(
+                      tags$strong("Concerns have been identified."),
+                      " Please specify the actions below."
+                    )
+                  ),
+                  
+                  # Actions suggested by CCC - matches REDCap ccc_action field
+                  checkboxGroupInput(
+                    "ccc_action",
+                    "Actions suggested by CCC:",
+                    choices = c(
+                      "Remediation plan" = "1",
+                      "Probation" = "2", 
+                      "Referral for professionalism" = "3",
+                      "Coach follow up" = "4",
+                      "Meet with PD and or CCC Chair" = "5",
+                      "Meet with Chiefs" = "6",
+                      "Other (see notes)" = "7"
+                    ),
+                    selected = character(0)
+                  ),
+                  
+                  # Competency areas - matches REDCap ccc_competency field  
+                  checkboxGroupInput(
+                    "ccc_competency",
+                    "Which area(s) of competence, if any? (can select more than one):",
+                    choices = c(
+                      "Patient Care" = "1",
+                      "Medical Knowledge" = "2",
+                      "Systems-based Practice" = "3", 
+                      "Practice-based Learning and Improvement" = "4",
+                      "Professionalism" = "5",
+                      "Interpersonal Communication Skills" = "6",
+                      "Not a competence concern" = "7"
+                    ),
+                    selected = character(0)
+                  )
+                ),
+                
+                # Issues for follow up - ONLY for Scheduled Reviews
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '1'",
+                  textAreaInput(
+                    "ccc_issues_follow_up",
+                    "Issues for the Program to deal with or follow up / action items? (Type NA if none):",
+                    rows = 4,
+                    width = "100%",
+                    placeholder = "Enter any issues for program follow-up or type 'NA' if none..."
+                  )
+                ),
+                
+                # General Comments - ONLY for Scheduled Reviews
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '1'",
+                  textAreaInput(
+                    "ccc_comments",
+                    "Additional Comments:",
+                    rows = 4,
+                    placeholder = "Enter any additional comments about this resident's review..."
                   )
                 )
               )
             )
-          )
-        ),
-        
-        # Coach ILP Summary, Secondary Review Summary, and Basic CCC Questions
-        fluidRow(
+          ),
+          
           column(
             width = 6,
+            
+            # Review Type and Basic Information
             card(
-              card_header("Secondary Review Summary"),
+              card_header("CCC Review - Basic Information",
+                          `data-card-type` = "ccc-basic"
+              ),
               card_body(
-                fluidRow(
-                  # LEFT COLUMN - Review Details
-                  column(
-                    width = 6,
-                    # Review Type
-                    radioButtons(
-                      "ccc_rev_type",
-                      "Review Type:",
-                      choices = c(
-                        "Scheduled Review" = "1",
-                        "Interim Review" = "2"
-                      ),
-                      selected = character(0)
+                # Review Type
+                radioButtons(
+                  "ccc_rev_type",
+                  "Review Type:",
+                  choices = c(
+                    "Scheduled Review" = "1",
+                    "Interim Review" = "2"
+                  ),
+                  selected = character(0)
+                ),
+                
+                # Session (for scheduled reviews ONLY)
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '1'",
+                  selectInput(
+                    "ccc_session",
+                    "Review Session:",
+                    choices = c(
+                      "Select session..." = "",
+                      "Mid Intern" = "1",
+                      "End Intern" = "2",
+                      "Mid PGY2" = "3",
+                      "End PGY2" = "4",
+                      "Mid PGY3" = "5",
+                      "Graduation" = "6",
+                      "Intern Intro" = "7"
                     ),
-                    
-                    # Session (for scheduled reviews) - moved to left column
-                    conditionalPanel(
-                      condition = "input.ccc_rev_type == '1'",
-                      selectInput(
-                        "ccc_session",
-                        "Review Session:",
-                        choices = c(
-                          "Select session..." = "",
-                          "Mid Intern" = "1",
-                          "End Intern" = "2",
-                          "Mid PGY2" = "3",
-                          "End PGY2" = "4",
-                          "Mid PGY3" = "5",
-                          "Graduation" = "6",
-                          "Intern Intro" = "7"
-                        ),
-                        selected = ""
-                      )
-                    ),
-                    
-                    # Concerns
+                    selected = ""
+                  ),
+                  
+                  # Milestone completion (for scheduled reviews EXCEPT Intern Intro)
+                  conditionalPanel(
+                    condition = "input.ccc_session != '7'",
                     radioButtons(
-                      "ccc_concern",
-                      "Are there any concerns about this resident?",
+                      "ccc_mile",
+                      "Are the milestones complete and acceptable?",
                       choices = c(
                         "No" = "0",
                         "Yes" = "1"
                       ),
                       selected = character(0)
-                    ),
-                    
-                    # Additional fields when concerns = Yes
-                    conditionalPanel(
-                      condition = "input.ccc_concern == '1'",
-                      div(
-                        class = "alert alert-warning",
-                        tags$p(
-                          tags$strong("Please describe the concerns:"),
-                          "Your comments will be reviewed by the CCC."
-                        ),
-                        textAreaInput(
-                          "ccc_concern_details", 
-                          label = NULL,
-                          rows = 4,
-                          width = "100%",
-                          placeholder = "Describe the specific concerns about this resident..."
-                        )
-                      )
-                    ),
-                    
-                    # Additional Comments Section
-                    radioButtons(
-                      "ccc_has_additional_comments",
-                      "Do you have additional comments?",
-                      choices = c(
-                        "No" = "0",
-                        "Yes" = "1"
-                      ),
-                      selected = "0"
-                    ),
-                    
-                    # Additional Comments Text Box (appears when Yes is selected)
-                    conditionalPanel(
-                      condition = "input.ccc_has_additional_comments == '1'",
-                      div(
-                        class = "mt-3",
-                        textAreaInput(
-                          "ccc_comments",
-                          "Additional Comments:",
-                          rows = 5,
-                          placeholder = "Enter any additional comments about this resident's review..."
-                        )
-                      )
                     )
                   ),
                   
-                  # RIGHT COLUMN - Milestone Assessment
-                  column(
-                    width = 6,
-                    # Milestone completion (for scheduled reviews) - moved to right column
-                    conditionalPanel(
-                      condition = "input.ccc_rev_type == '1'",
-                      div(
-                        class = "milestone-assessment-section",
-                        h5("Milestone Assessment", class = "text-primary mb-3"),
-                        radioButtons(
-                          "ccc_mile",
-                          "Are the milestones complete and acceptable?",
-                          choices = c(
-                            "No" = "0",
-                            "Yes" = "1"
-                          ),
-                          selected = character(0)
-                        ),
-                        
-                        conditionalPanel(
-                          condition = "input.ccc_mile == '0'",
-                          div(
-                            class = "alert alert-warning mb-4",
-                            tags$p(
-                              tags$strong("Milestone concerns detected:"),
-                              "Please review and edit the milestone assessments below, then provide comments about your changes."
-                            ),
-                            textAreaInput(
-                              "ccc_mile_concerns", 
-                              label = "Comments about milestone changes:",
-                              rows = 3,
-                              width = "100%",
-                              placeholder = "Explain what milestone changes you made and why..."
-                            )
-                          ),
-                          
-                          # Deploy the milestone editing module
-                          div(
-                            class = "milestone-edit-section",
-                            card(
-                              card_header(
-                                div(
-                                  class = "d-flex justify-content-between align-items-center",
-                                  h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
-                                  tags$small("Make corrections to the milestone ratings below", class = "text-muted")
-                                )
-                              ),
-                              card_body(
-                                # This will render the milestone module for editing
-                                uiOutput("ccc_milestone_module_ui")
-                              )
-                            )
-                          )
-                        )
+                  # Intern Intro Note (when session = "7")
+                  conditionalPanel(
+                    condition = "input.ccc_session == '7'",
+                    div(
+                      class = "alert alert-info mt-3",
+                      icon("info-circle", class = "me-2"),
+                      tags$strong("Intern Introduction Review"),
+                      tags$p(
+                        class = "mb-0 mt-2",
+                        "This is an introductory review for new interns. Milestone assessments are not required during this period."
                       )
                     )
                   )
                 ),
                 
-                # Validation and submit (full width at bottom)
-                div(
-                  class = "text-center mt-4",
-                  hr(),
-                  uiOutput("ccc_submit_button")
+                # Interim Notes (for interim reviews ONLY)
+                conditionalPanel(
+                  condition = "input.ccc_rev_type == '2'",
+                  div(
+                    class = "mt-3",
+                    h6("Interim Review Notes:", class = "text-primary"),
+                    textAreaInput(
+                      "ccc_interim",
+                      label = NULL,
+                      rows = 6,
+                      width = "100%",
+                      placeholder = "Enter interim review notes and observations..."
+                    )
+                  )
                 )
               )
+            ),
+            
+            br(),
+            
+            # Milestone editing section - ONLY for Scheduled Reviews when milestones = No AND NOT Intern Intro
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1' && input.ccc_session != '7' && input.ccc_mile == '0'",
+              card(
+                card_header(
+                  div(
+                    class = "d-flex justify-content-between align-items-center",
+                    h5("Edit Milestone Assessments", class = "mb-0 text-warning"),
+                    tags$small("Select and edit specific milestones that need corrections", class = "text-muted")
+                  )
+                ),
+                card_body(
+                  # Comments about milestone changes
+                  textAreaInput(
+                    "ccc_mile_concerns", 
+                    label = "Comments about milestone changes:",
+                    rows = 3,
+                    width = "100%",
+                    placeholder = "Explain what milestone changes you made and why..."
+                  ),
+                  
+                  # Enhanced milestone editing module
+                  uiOutput("ccc_milestone_module_ui")
+                )
+              )
+            ),
+            
+            # Placeholder for Scheduled Reviews when milestones are acceptable (NOT Intern Intro)
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1' && input.ccc_session != '7' && input.ccc_mile == '1'",
+              div(
+                class = "text-center p-4",
+                style = "background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; margin-top: 20px;",
+                icon("check-circle", class = "fa-2x text-success mb-3"),
+                h5("Milestones Acceptable", class = "text-success"),
+                p("No milestone editing required.", class = "text-muted")
+              )
+            ),
+            
+            # Placeholder for Intern Intro Reviews
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '1' && input.ccc_session == '7'",
+              div(
+                class = "text-center p-4",
+                style = "background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%); border-radius: 10px; margin-top: 20px;",
+                icon("user-graduate", class = "fa-2x text-warning mb-3"),
+                h5("Intern Introduction Review", class = "text-warning"),
+                p("Welcome review for new interns. Focus on orientation, concerns, and initial observations.", class = "text-muted")
+              )
+            ),
+            
+            # Placeholder for Interim Reviews
+            conditionalPanel(
+              condition = "input.ccc_rev_type == '2'",
+              div(
+                class = "text-center p-4",
+                style = "background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-radius: 10px; margin-top: 20px;",
+                icon("clipboard-list", class = "fa-2x text-info mb-3"),
+                h5("Interim Review", class = "text-info"),
+                p("Complete the interim notes above and indicate any concerns on the left.", class = "text-muted")
+              )
+            ),
+            
+            # Submit button - ALWAYS at bottom right
+            div(
+              class = "text-center mt-4",
+              uiOutput("ccc_submit_button")
             )
           )
         )
       )
-    )
+    ) # End of ccc-pages div
   ) # End of main-content div
-) #
+)
