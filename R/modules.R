@@ -191,7 +191,6 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
         )
       )
     )
-    )
     
     # Reactive values
     values <- reactiveValues(
