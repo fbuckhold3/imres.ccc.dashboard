@@ -1,5 +1,183 @@
-# Enhanced Milestone Module for CCC Review with Selective Editing
-# This fixes the field mapping and adds selective milestone editing
+# ============================================================================
+# MILESTONE DEFINITIONS - MOVED OUTSIDE FUNCTION SCOPE
+# ============================================================================
+
+# Define milestone structure globally so all functions can access it
+MILESTONE_DEFINITIONS <- list(
+  pc_mk = list(
+    title = "Patient Care & Medical Knowledge",
+    items = c(
+      "rep_pc1" = "PC1: History",
+      "rep_pc2" = "PC2: Physical Examination", 
+      "rep_pc3" = "PC3: Clinical Reasoning",
+      "rep_pc4" = "PC4: Patient Management - Inpatient",
+      "rep_pc5" = "PC5: Patient Management - Outpatient",
+      "rep_pc6" = "PC6: Digital Health",
+      "rep_mk1" = "MK1: Applied Foundational Sciences",
+      "rep_mk2" = "MK2: Therapeutic Knowledge",
+      "rep_mk3" = "MK3: Knowledge of Diagnostic Testing"
+    )
+  ),
+  sbp_pbl = list(
+    title = "Systems-Based Practice & Practice-Based Learning",
+    items = c(
+      "rep_sbp1" = "SBP1: Patient Safety and Quality Improvement",
+      "rep_sbp2" = "SBP2: System Navigation for Patient-Centered Care", 
+      "rep_sbp3" = "SBP3: Physician Role in Health Care Systems",
+      "rep_pbl1" = "PBLI1: Evidence-Based and Informed Practice",
+      "rep_pbl2" = "PBLI2: Reflective Practice and Commitment to Personal Growth"
+    )
+  ),
+  prof_ics = list(
+    title = "Professionalism & Interpersonal Communication",
+    items = c(
+      "rep_prof1" = "PROF1: Professional Behavior",
+      "rep_prof2" = "PROF2: Ethical Principles",
+      "rep_prof3" = "PROF3: Accountability/Conscientiousness", 
+      "rep_prof4" = "PROF4: Knowledge of Systemic and Individual Factors of Well-Being",
+      "rep_ics1" = "ICS1: Patient- and Family-Centered Communication",
+      "rep_ics2" = "ICS2: Interprofessional and Team Communication",
+      "rep_ics3" = "ICS3: Communication within Health Care Systems"
+    )
+  )
+)
+
+# ============================================================================
+# HELPER FUNCTIONS - MOVED OUTSIDE FUNCTION SCOPE
+# ============================================================================
+
+# Helper function to get correct milestone title by key
+get_milestone_title <- function(milestone_key) {
+  for (section_name in names(MILESTONE_DEFINITIONS)) {
+    section <- MILESTONE_DEFINITIONS[[section_name]]
+    if (milestone_key %in% names(section$items)) {
+      return(section$items[[milestone_key]])
+    }
+  }
+  # Fallback to key name if not found
+  return(milestone_key)
+}
+
+# Helper functions for milestone levels
+get_level_name <- function(score) {
+  case_when(
+    is.na(score) || score == 0 ~ "Not Assessed",
+    score <= 2 ~ "Novice",
+    score <= 4 ~ "Adv. Beginner", 
+    score <= 6 ~ "Competent",
+    score <= 8 ~ "Proficient",
+    score == 9 ~ "Expert",
+    TRUE ~ "Unknown"
+  )
+}
+
+get_level_class <- function(score) {
+  case_when(
+    is.na(score) || score == 0 ~ "level-0",
+    score <= 2 ~ "level-1-2",
+    score <= 4 ~ "level-3-4", 
+    score <= 6 ~ "level-5-6",
+    score <= 8 ~ "level-7-8",
+    score == 9 ~ "level-9",
+    TRUE ~ "level-0"
+  )
+}
+
+# Helper function to create milestone level guide
+create_milestone_level_guide <- function() {
+  div(
+    class = "alert alert-light",
+    h6("Assessment Levels:"),
+    tags$ul(
+      tags$li(tags$strong("0: "), "Not Assessed"),
+      tags$li(tags$strong("1-2 (Novice): "), "Requires direct supervision"),
+      tags$li(tags$strong("3-4 (Advanced Beginner): "), "Requires some supervision"),
+      tags$li(tags$strong("5-6 (Competent): "), "Can work independently"),
+      tags$li(tags$strong("7-8 (Proficient): "), "Can supervise others"),
+      tags$li(tags$strong("9 (Expert): "), "Exceptional ability, teaches others")
+    )
+  )
+}
+
+# FIXED: Image display function with correct image loading
+show_milestone_info <- function(milestone_key, milestone_name) {
+  
+  # Map milestone field names to image filenames
+  image_filename <- gsub("^rep_", "", milestone_key)  # Remove 'rep_' prefix
+  image_filename <- gsub("^pbl", "pbli", image_filename)  # Handle pbl -> pbli
+  image_filename <- trimws(image_filename)  # Remove whitespace
+  image_filename <- gsub("\\s+", "", image_filename)  # Remove internal spaces
+  
+  message("Looking for milestone image: '", image_filename, ".png' (from field: '", milestone_key, "')")
+  
+  # Check for image in LOCAL www/milestones directory
+  local_img_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
+  img_exists <- file.exists(local_img_path)
+  
+  message("Local image path: ", local_img_path)
+  message("Local image exists: ", img_exists)
+  
+  modal_content <- if (img_exists) {
+    message("✅ Found local milestone image for ", milestone_key)
+    tagList(
+      div(
+        style = "text-align: center; margin-bottom: 20px;",
+        h5(milestone_name, style = "color: #007bff; margin-bottom: 15px;"),
+        # FIXED: Direct image tag instead of JavaScript
+        tags$img(
+          src = paste0("milestones/", image_filename, ".png"), 
+          style = "max-width: 100%; max-height: 500px; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);",
+          alt = paste("Milestone image for", milestone_name),
+          # Add error handling for missing images
+          onerror = paste0("this.style.display='none'; ",
+                           "this.parentNode.innerHTML='<div class=\"alert alert-warning\">Image not found: ", 
+                           image_filename, ".png</div>';")
+        )
+      ),
+      hr(),
+      create_milestone_level_guide()
+    )
+  } else {
+    message("❌ No local milestone image found for ", milestone_key, " (looking for: '", image_filename, ".png')")
+    tagList(
+      div(
+        class = "alert alert-info",
+        h5(icon("info-circle"), " Milestone Information"),
+        h6(milestone_name, style = "color: #007bff; font-weight: 600;"),
+        p("This milestone assesses specific competencies related to internal medicine practice."),
+        p(paste("Expected image file: www/milestones/", image_filename, ".png", sep=""), 
+          class = "text-muted small"),
+        
+        # Instructions for adding images
+        div(
+          class = "mt-3 p-3 bg-light rounded border",
+          h6("To add milestone images:", class = "text-primary"),
+          tags$ol(
+            tags$li("Create directory: ", tags$code("www/milestones/")),
+            tags$li("Add image file: ", tags$code(paste0(image_filename, ".png"))),
+            tags$li("Refresh the app")
+          )
+        )
+      ),
+      create_milestone_level_guide()
+    )
+  }
+  
+  showModal(modalDialog(
+    title = div(
+      icon("graduation-cap"), 
+      paste("Milestone Details:", gsub("^rep_", "", milestone_key))
+    ),
+    modal_content,
+    easyClose = TRUE,
+    size = "l",
+    footer = modalButton("Close")
+  ))
+}
+
+# ============================================================================
+# CCC MILESTONE MODULE
+# ============================================================================
 
 #' Enhanced Milestone Rating UI Module for CCC
 #' @export
@@ -7,100 +185,8 @@ mod_ccc_miles_ui <- function(id) {
   ns <- NS(id)
   
   tagList(
-    # Custom CSS for enhanced milestone interface
-    tags$head(
-      tags$style(HTML("
-        .milestone-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 15px;
-          margin: 20px 0;
-        }
-        .milestone-competency {
-          background: #f8f9fa;
-          border-radius: 10px;
-          padding: 15px;
-          border-left: 4px solid #007bff;
-        }
-        .milestone-competency h5 {
-          color: #007bff;
-          margin-bottom: 15px;
-          font-weight: 600;
-        }
-        .milestone-item {
-          background: white;
-          border-radius: 6px;
-          padding: 12px;
-          margin-bottom: 10px;
-          border: 1px solid #dee2e6;
-          transition: all 0.2s ease;
-        }
-        .milestone-item.milestone-selected {
-          border-color: #007bff;
-          background-color: #f0f8ff;
-        }
-        .milestone-item:hover {
-          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-          transform: translateY(-1px);
-        }
-        .milestone-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 8px;
-        }
-        .milestone-label {
-          font-weight: 500;
-          color: #495057;
-          flex: 1;
-        }
-        .milestone-controls {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-top: 8px;
-        }
-        .level-badge {
-          padding: 4px 8px;
-          border-radius: 12px;
-          font-size: 0.8em;
-          font-weight: 600;
-          min-width: 80px;
-          text-align: center;
-        }
-        .level-0 { background: #6c757d; color: white; }
-        .level-1-2 { background: #dc3545; color: white; }
-        .level-3-4 { background: #fd7e14; color: white; }
-        .level-5-6 { background: #ffc107; color: black; }
-        .level-7-8 { background: #20c997; color: white; }
-        .level-9 { background: #198754; color: white; }
-        .milestone-slider {
-          flex: 1;
-          margin: 0 10px;
-        }
-        .milestone-actions {
-          display: flex;
-          gap: 5px;
-        }
-        .milestone-checkbox {
-          margin-right: 10px;
-        }
-        .selection-summary {
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border-radius: 10px;
-          padding: 15px;
-          margin-bottom: 20px;
-          text-align: center;
-        }
-        .milestone-image-modal .modal-body img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 8px;
-          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-      "))
-    ),
+    # Your existing CSS and UI code...
+    # (Keep all the CSS from your current version)
     
     # Selection summary
     div(
@@ -153,44 +239,8 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
   moduleServer(id, function(input, output, session) {
     ns <- session$ns
     
-    milestones <- list(
-      pc_mk = list(
-        title = "Patient Care & Medical Knowledge",
-        items = c(
-          "rep_pc1" = "PC1: History",
-          "rep_pc2" = "PC2: Physical Examination", 
-          "rep_pc3" = "PC3: Clinical Reasoning",
-          "rep_pc4" = "PC4: Patient Management - Inpatient",
-          "rep_pc5" = "PC5: Patient Management - Outpatient",
-          "rep_pc6" = "PC6: Digital Health",
-          "rep_mk1" = "MK1: Applied Foundational Sciences",
-          "rep_mk2" = "MK2: Therapeutic Knowledge",
-          "rep_mk3" = "MK3: Knowledge of Diagnostic Testing"
-        )
-      ),
-      sbp_pbl = list(
-        title = "Systems-Based Practice & Practice-Based Learning",
-        items = c(
-          "rep_sbp1" = "SBP1: Patient Safety and Quality Improvement",
-          "rep_sbp2" = "SBP2: System Navigation for Patient-Centered Care", 
-          "rep_sbp3" = "SBP3: Physician Role in Health Care Systems",
-          "rep_pbl1" = "PBLI1: Evidence-Based and Informed Practice",
-          "rep_pbl2" = "PBLI2: Reflective Practice and Commitment to Personal Growth"
-        )
-      ),
-      prof_ics = list(
-        title = "Professionalism & Interpersonal Communication",
-        items = c(
-          "rep_prof1" = "PROF1: Professional Behavior",
-          "rep_prof2" = "PROF2: Ethical Principles",
-          "rep_prof3" = "PROF3: Accountability/Conscientiousness", 
-          "rep_prof4" = "PROF4: Knowledge of Systemic and Individual Factors of Well-Being",
-          "rep_ics1" = "ICS1: Patient- and Family-Centered Communication",
-          "rep_ics2" = "ICS2: Interprofessional and Team Communication",
-          "rep_ics3" = "ICS3: Communication within Health Care Systems"
-        )
-      )
-    )
+    # Use the global milestone definitions
+    milestones <- MILESTONE_DEFINITIONS
     
     # Reactive values
     values <- reactiveValues(
@@ -199,31 +249,6 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       selected_milestones = list(),
       data_loaded = FALSE
     )
-    
-    # Helper functions
-    get_level_name <- function(score) {
-      case_when(
-        is.na(score) || score == 0 ~ "Not Assessed",
-        score <= 2 ~ "Novice",
-        score <= 4 ~ "Adv. Beginner", 
-        score <= 6 ~ "Competent",
-        score <= 8 ~ "Proficient",
-        score == 9 ~ "Expert",
-        TRUE ~ "Unknown"
-      )
-    }
-    
-    get_level_class <- function(score) {
-      case_when(
-        is.na(score) || score == 0 ~ "level-0",
-        score <= 2 ~ "level-1-2",
-        score <= 4 ~ "level-3-4", 
-        score <= 6 ~ "level-5-6",
-        score <= 8 ~ "level-7-8",
-        score == 9 ~ "level-9",
-        TRUE ~ "level-0"
-      )
-    }
     
     # FIXED: Field mapping function
     map_old_to_new_fields <- function(old_data) {
@@ -254,38 +279,44 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
     
     # Initialize milestone data
     observe({
-      all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
-      
-      for (key in all_milestone_keys) {
-        local({
-          key_local <- key
-          
-          # Get the correct milestone title
-          milestone_title <- get_milestone_title(key_local)
-          
-          # Update selection status
-          observeEvent(input[[paste0("select_", key_local)]], {
-            values$selected_milestones[[key_local]] <- input[[paste0("select_", key_local)]] %||% FALSE
-          }, ignoreInit = TRUE)
-          
-          # Update score displays
-          output[[paste0("score_", key_local)]] <- renderText({
-            score <- input[[key_local]] %||% 0
-            as.character(score)
-          })
-          
-          # Update stored scores
-          observeEvent(input[[key_local]], {
-            if (!is.null(input[[key_local]])) {
-              values$scores[[key_local]] <- input[[key_local]]
+      if (!values$data_loaded) {
+        all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+        
+        # Initialize with default scores
+        for (key in all_milestone_keys) {
+          values$scores[[key]] <- 0
+          values$original_scores[[key]] <- 0
+          values$selected_milestones[[key]] <- FALSE
+        }
+        
+        # Load existing data if provided
+        if (!is.null(existing_data) && is.reactive(existing_data)) {
+          data <- existing_data()
+          if (!is.null(data) && nrow(data) > 0) {
+            message("Loading existing milestone data...")
+            message("Available columns in existing_data: ", paste(names(data), collapse=", "))
+            
+            # FIXED: Use field mapping
+            mapped_data <- map_old_to_new_fields(data[1, ])
+            
+            if (length(mapped_data) > 0) {
+              for (key in names(mapped_data)) {
+                if (key %in% all_milestone_keys) {
+                  values$scores[[key]] <- mapped_data[[key]]
+                  values$original_scores[[key]] <- mapped_data[[key]]
+                  updateSliderInput(session, key, value = mapped_data[[key]])
+                }
+              }
+              
+              assessed_count <- sum(sapply(mapped_data, function(x) x > 0))
+              message("Loaded existing milestone data with ", assessed_count, " assessed milestones")
+            } else {
+              message("No milestone data found in existing data")
             }
-          }, ignoreInit = TRUE)
-          
-          # FIXED: Handle info button clicks with correct titles
-          observeEvent(input[[paste0("info_", key_local)]], {
-            show_milestone_info(key_local, milestone_title)
-          })
-        })
+          }
+        }
+        
+        values$data_loaded <- TRUE
       }
     })
     
@@ -361,12 +392,12 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
       })
     }
     
-    
     # Render each section
     output$pc_mk_milestones <- render_milestone_section("pc_mk")
     output$sbp_pbl_milestones <- render_milestone_section("sbp_pbl")
     output$prof_ics_milestones <- render_milestone_section("prof_ics")
     
+    # Handle milestone selection changes
     observe({
       all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
       
@@ -374,14 +405,8 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
         local({
           key_local <- key
           
-          # Find which section this milestone belongs to
-          milestone_name <- NULL
-          for (section_name in names(milestones)) {
-            if (key_local %in% names(milestones[[section_name]]$items)) {
-              milestone_name <- milestones[[section_name]]$items[[key_local]]
-              break
-            }
-          }
+          # Get the correct milestone title using the global function
+          milestone_title <- get_milestone_title(key_local)
           
           # Update selection status
           observeEvent(input[[paste0("select_", key_local)]], {
@@ -401,17 +426,36 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
             }
           }, ignoreInit = TRUE)
           
-          # FIXED: Handle info button clicks for milestone images
+          # FIXED: Handle info button clicks with correct titles
           observeEvent(input[[paste0("info_", key_local)]], {
-            if (!is.null(milestone_name)) {
-              show_milestone_info(key_local, milestone_name)
-            } else {
-              show_milestone_info(key_local, key_local)  # Fallback to key name
-            }
+            show_milestone_info(key_local, milestone_title)
           })
         })
       }
     })
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
+    
+    
+    
+   
     
     show_milestone_info <- function(milestone_key, milestone_name) {
       
@@ -670,16 +714,6 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
   })
 }
 
-# Helper function to get correct milestone title by key
-get_milestone_title <- function(milestone_key) {
-  for (section_name in names(milestones)) {
-    section <- milestones[[section_name]]
-    if (milestone_key %in% names(section$items)) {
-      return(section$items[[milestone_key]])
-    }
-  }
-  # Fallback to key name if not found
-  return(milestone_key)
-}
+
 
 
