@@ -170,27 +170,26 @@ server <- function(input, output, session) {
   
   datatable_with_click_and_single_search <- function(data, caption = NULL) {
     
-    # Debug: Check what data we're getting
-    message("Creating datatable with ", nrow(data), " rows and ", ncol(data), " columns")
+    message("Creating enhanced datatable with ", nrow(data), " rows and ", ncol(data), " columns")
     if (nrow(data) > 0) {
       message("First row data: ", paste(as.character(data[1, 1:min(6, ncol(data))]), collapse = " | "))
     }
     
     dt <- DT::datatable(
       data,
-      escape = FALSE,  # IMPORTANT: This allows HTML to render
+      escape = FALSE,
       options = list(
-        pageLength = 25,  # Show more rows since we have full width
-        dom = 'Bfrtip',   # B=buttons, f=filter(search), r=processing, t=table, i=info, p=pagination
-        scrollX = FALSE,  # Disable horizontal scroll since we want full width
-        autoWidth = TRUE, # Let DataTable auto-size columns
+        pageLength = 25,
+        dom = 'rtip',  # REMOVED 'f' to hide default search, keeping r=processing, t=table, i=info, p=pagination
+        scrollX = FALSE,
+        autoWidth = TRUE,
         columnDefs = list(
-          # Make status columns narrower but not tiny
-          list(width = "100px", targets = c(6, 7, 8, 9)),  # Status columns
-          # Make name column a bit wider
-          list(width = "180px", targets = 0),  # Resident name
-          # Medium width for other text columns
-          list(width = "120px", targets = c(1, 2, 3, 4, 5)),  # Level, Access, Coach, etc.
+          # Enhanced status columns - center align and optimize for bigger dots
+          list(width = "120px", targets = c(6, 7, 8, 9), className = "text-center"),
+          # Name column
+          list(width = "180px", targets = 0),
+          # Other text columns
+          list(width = "120px", targets = c(1, 2, 3, 4, 5)),
           list(
             targets = "_all",
             render = DT::JS(
@@ -203,38 +202,48 @@ server <- function(input, output, session) {
             )
           )
         ),
-        # Responsive design
         responsive = TRUE,
-        # Search configuration
         search = list(
           regex = FALSE,
           caseInsensitive = TRUE
+        ),
+        # Enhanced styling
+        initComplete = DT::JS(
+          "function(settings, json) {",
+          "  $(this.api().table().header()).css({",
+          "    'background-color': '#f8f9fa',",
+          "    'font-weight': 'bold',",
+          "    'border-bottom': '2px solid #dee2e6'",
+          "  });",
+          "}"
         )
       ),
       caption = tags$div(
-        style = "caption-side: top; text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 10px;",
+        style = "caption-side: top; text-align: center; font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #495057;",
         caption
       ),
       rownames = FALSE,
-      class = 'table table-striped table-hover table-bordered',  # Bootstrap classes for better styling
+      class = 'table table-striped table-hover table-bordered table-sm',
       selection = 'single',
-      # REMOVED filter = "top" - this removes the individual column filters
       callback = JS("
-      console.log('DataTable callback initialized');
+      console.log('Enhanced DataTable callback initialized');
+      
+      // Connect our custom search to the DataTable
+      $('#global_search').on('keyup', function() {
+        table.search(this.value).draw();
+      });
+      
       table.on('click', 'tbody tr', function() {
           console.log('Row clicked!');
           
-          // Clear previously selected rows
+          // Enhanced row selection with visual feedback
           table.$('tr.selected').removeClass('selected');
-          
-          // Select this row
           $(this).addClass('selected');
+          $(this).css('background-color', '#e3f2fd');
           
-          // Get the row data
           var rowData = table.row(this).data();
           console.log('Row data:', rowData);
           
-          // Handle potential undefined values
           var residentName = rowData && rowData[0] ? rowData[0] : '';
           var residentLevel = rowData && rowData[1] ? rowData[1] : '';
           var accessCode = rowData && rowData[2] ? rowData[2] : '';
@@ -244,11 +253,9 @@ server <- function(input, output, session) {
           
           console.log('Parsed data - Name:', residentName, 'Level:', residentLevel, 'Access:', accessCode);
           
-          // Only send if we have required data
           if (residentName && residentLevel && accessCode) {
             console.log('Sending data to Shiny...');
             
-            // Set input value for Shiny with timestamp to force update
             Shiny.setInputValue('selected_resident_in_ccc_table', 
                 {
                     name: residentName, 
@@ -257,7 +264,7 @@ server <- function(input, output, session) {
                     primary_coach: primaryCoach,
                     second_reviewer: secondReviewer,
                     review_period: reviewPeriod,
-                    timestamp: new Date().getTime()  // Force update
+                    timestamp: new Date().getTime()
                 }, 
                 {priority: 'event'});
           } else {
@@ -267,16 +274,17 @@ server <- function(input, output, session) {
     ")
     ) %>%
       DT::formatStyle(
-        columns = 1:6,  # Base columns
+        columns = 1:6,
         backgroundColor = '#ffffff',
         borderColor = '#dee2e5'
       ) %>%
-      # Center align the status columns
+      # Enhanced status column styling for bigger dots
       DT::formatStyle(
-        columns = 7:10,  # Status columns
-        textAlign = 'center'
+        columns = 7:10,
+        textAlign = 'center',
+        verticalAlign = 'middle'
       ) %>%
-      # Highlight rows on hover
+      # Enhanced hover effects
       DT::formatStyle(
         columns = 1:10,
         cursor = 'pointer'
@@ -1374,6 +1382,91 @@ server <- function(input, output, session) {
   # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
   # ============================================================================
   
+  # Handle initial submit button click - show confirmation modal
+  observeEvent(input$submit_ccc_review, {
+    req(values$selected_resident)
+    
+    # Create summary of what will be submitted
+    review_type_display <- if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
+      "Scheduled Review"
+    } else if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "2") {
+      "Interim Review"
+    } else {
+      "Unknown"
+    }
+    
+    session_display <- if (!is.null(input$ccc_session) && input$ccc_session != "") {
+      switch(input$ccc_session,
+             "1" = "Mid Intern",
+             "2" = "End Intern", 
+             "3" = "Mid PGY2",
+             "4" = "End PGY2",
+             "5" = "Mid PGY3",
+             "6" = "Graduation",
+             "7" = "Intern Intro",
+             paste("Session", input$ccc_session))
+    } else {
+      "Not specified"
+    }
+    
+    concerns_display <- if (!is.null(input$ccc_concern)) {
+      if (input$ccc_concern == "1") "Yes" else "No"
+    } else {
+      "Not specified"
+    }
+    
+    milestone_display <- if (!is.null(input$ccc_mile)) {
+      if (input$ccc_mile == "1") "Acceptable" else "Not Acceptable (edits required)"
+    } else {
+      "Not applicable"
+    }
+    
+    showModal(modalDialog(
+      title = div(
+        icon("exclamation-triangle", class = "text-warning me-2"),
+        "Confirm CCC Review Submission"
+      ),
+      
+      div(
+        h5("Review Summary:"),
+        tags$ul(
+          tags$li(tags$strong("Resident: "), values$selected_resident$name),
+          tags$li(tags$strong("Review Type: "), review_type_display),
+          if (input$ccc_rev_type == "1") {
+            tags$li(tags$strong("Session: "), session_display)
+          },
+          if (input$ccc_rev_type == "1" && !is.null(input$ccc_session) && input$ccc_session != "7") {
+            tags$li(tags$strong("Milestones: "), milestone_display)
+          },
+          tags$li(tags$strong("Concerns: "), concerns_display)
+        ),
+        
+        hr(),
+        
+        div(
+          class = "alert alert-info",
+          icon("info-circle", class = "me-2"),
+          tags$strong("This action cannot be undone."),
+          " The CCC review will be permanently saved to REDCap."
+        )
+      ),
+      
+      footer = tagList(
+        modalButton("Cancel"),
+        actionButton(
+          "confirm_submit_ccc",
+          "Submit CCC Review",
+          class = "btn-success",
+          icon = icon("save")
+        )
+      ),
+      
+      easyClose = FALSE,
+      size = "m"
+    ))
+  })
+  
+  # Handle confirmed submission
   observeEvent(input$confirm_submit_ccc, {
     req(values$selected_resident)
     
@@ -1389,131 +1482,203 @@ server <- function(input, output, session) {
       # Get record ID for the selected resident
       record_id <- find_record_id(app_data(), values$selected_resident$name)
       
-      # Get the current app period for mapping
-      current_app_period <- get_current_period()
-      
-      # Map to CCC session number
-      session_mapping <- c(
-        "Mid Intern" = "1",
-        "End Intern" = "2", 
-        "Mid PGY2" = "3",
-        "End PGY2" = "4",
-        "Mid PGY3" = "5",
-        "Graduation" = "6",
-        "Graduating" = "6",
-        "Intern Intro" = "7"
-      )
-      
-      # Use the selected session from the form, or map from current period
-      ccc_session_value <- if (!is.null(input$ccc_session) && input$ccc_session != "") {
-        input$ccc_session
-      } else {
-        # Fallback to mapping from current period
-        mapped_period <- map_to_milestone_period(values$selected_resident$Level, current_app_period)
-        session_mapping[mapped_period]
-      }
-      
-      # Ensure we have a valid session
-      if (is.null(ccc_session_value) || is.na(ccc_session_value)) {
-        showNotification("Error: Could not determine CCC session", type = "error")
+      # Validate we have essential data
+      if (is.null(record_id) || is.null(input$ccc_rev_type)) {
+        showNotification("Error: Missing essential submission data", type = "error")
         return()
       }
       
-      message("Submitting CCC review for record_id: ", record_id, ", session: ", ccc_session_value)
-      
-      # Check if milestone edits were made
-      milestone_edits_made <- FALSE
-      milestone_submission_result <- NULL
-      
-      if (!is.null(input$ccc_mile) && input$ccc_mile == "0" && !is.null(ccc_miles_mod$scores())) {
-        # Milestones were marked as unacceptable and edits were made
-        message("Milestone concerns detected, saving edited milestones...")
+      # STEP 1: Determine CCC session/instance using consolidated function
+      if (input$ccc_rev_type == "1") {
+        # SCHEDULED REVIEW
+        if (!is.null(input$ccc_session) && input$ccc_session != "") {
+          # Use selected session directly
+          ccc_session_value <- input$ccc_session
+          
+          # Convert session to period name for milestone submission
+          session_to_period_map <- c(
+            "1" = "Mid Intern",
+            "2" = "End Intern", 
+            "3" = "Mid PGY2",
+            "4" = "End PGY2",
+            "5" = "Mid PGY3",
+            "6" = "Graduation",
+            "7" = "Intern Intro"
+          )
+          milestone_period <- session_to_period_map[input$ccc_session]
+          
+        } else {
+          # Fallback: map from current app period
+          current_app_period <- get_current_period()
+          milestone_period <- map_to_milestone_period(values$selected_resident$Level, current_app_period)
+          
+          # Convert back to session number
+          period_to_session_map <- c(
+            "Mid Intern" = "1",
+            "End Intern" = "2", 
+            "Mid PGY2" = "3",
+            "End PGY2" = "4",
+            "Mid PGY3" = "5",
+            "Graduation" = "6",
+            "Graduating" = "6",
+            "Intern Intro" = "7"
+          )
+          ccc_session_value <- period_to_session_map[milestone_period]
+        }
         
-        # Submit the edited milestone data
-        milestone_submission_result <- submit_milestone_data(
+        message("Scheduled review - using session: ", ccc_session_value, " for period: ", milestone_period)
+        
+      } else if (input$ccc_rev_type == "2") {
+        # INTERIM REVIEW - get next available instance
+        ccc_session_value <- get_redcap_instance(
+          level = values$selected_resident$Level,
+          period = "Interim",
+          review_type = "interim",
+          redcap_url = redcap_url,
+          redcap_token = token,
+          record_id = record_id
+        )
+        
+        milestone_period <- NULL  # Not applicable for interim reviews
+        message("Interim review - using instance: ", ccc_session_value)
+        
+      } else {
+        showNotification("Error: Invalid review type", type = "error")
+        return()
+      }
+      
+      # Validate session/instance
+      if (is.null(ccc_session_value) || is.na(ccc_session_value)) {
+        showNotification("Error: Could not determine CCC session/instance", type = "error")
+        return()
+      }
+      
+      # STEP 2: Handle milestone edits (ONLY for scheduled reviews with unacceptable milestones)
+      milestone_edits_made <- FALSE
+      
+      if (input$ccc_rev_type == "1" &&  # Scheduled review only
+          !is.null(input$ccc_mile) && input$ccc_mile == "0" &&  # Milestones not acceptable
+          !is.null(ccc_miles_mod$scores()) && length(ccc_miles_mod$scores()) > 0) {  # Edits were made
+        
+        message("Processing milestone edits for unacceptable milestones...")
+        
+        # Submit milestone edits using consolidated function
+        milestone_result <- submit_milestone_data(
           redcap_url = redcap_url,
           redcap_token = token,
           record_id = record_id,
-          selected_period = values$current_period,
+          selected_period = milestone_period,
           resident_level = values$selected_resident$Level,
           milestone_scores = ccc_miles_mod$scores(),
-          milestone_desc = ccc_miles_mod$desc()
+          milestone_desc = list()
         )
         
-        if (milestone_submission_result$success) {
+        if (milestone_result$success) {
           milestone_edits_made <- TRUE
           message("Milestone edits saved successfully")
         } else {
-          showNotification(paste("Error saving milestone edits:", milestone_submission_result$outcome_message), 
-                           type = "error", duration = 10)
-          return()  # Don't proceed with CCC submission if milestone save failed
+          showNotification(
+            paste("Error saving milestone edits:", milestone_result$outcome_message), 
+            type = "error", 
+            duration = 10
+          )
+          return()  # Stop if milestone save failed
         }
       }
       
-      # Build CCC data
+      # STEP 3: Build CCC review data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
         ccc_rev_type = input$ccc_rev_type,
-        ccc_concern = input$ccc_concern
+        ccc_concern = input$ccc_concern %||% "0"  # Default to No concerns
       )
       
       # Add session for scheduled reviews
-      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
-        ccc_data$ccc_session = ccc_session_value
+      if (input$ccc_rev_type == "1") {
+        ccc_data$ccc_session <- ccc_session_value
       }
       
       # Add interim notes for interim reviews
-      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "2") {
-        if (!is.null(input$ccc_interim) && input$ccc_interim != "") {
+      if (input$ccc_rev_type == "2") {
+        if (!is.null(input$ccc_interim) && nzchar(trimws(input$ccc_interim))) {
           ccc_data$ccc_interim <- input$ccc_interim
         }
       }
       
-      # Add concern-related fields if concerns were indicated
+      # FIXED: Handle checkbox fields properly for REDCap
       if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-        # Add actions if selected
+        
+        # CHECKBOX: Actions suggested by CCC (ccc_action___1, ccc_action___2, etc.)
         if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
-          ccc_data$ccc_action <- paste(input$ccc_action, collapse = ",")
-        }
-        
-        # Add competency areas if selected
-        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
-          ccc_data$ccc_competency <- paste(input$ccc_competency, collapse = ",")
-        }
-      }
-      
-      # Add scheduled review specific fields
-      if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
-        # Add ILP comments if provided
-        if (!is.null(input$ccc_ilp) && input$ccc_ilp != "") {
-          ccc_data$ccc_ilp <- input$ccc_ilp
-        }
-        
-        # Add follow-up actions if provided
-        if (!is.null(input$ccc_issues_follow_up) && input$ccc_issues_follow_up != "") {
-          ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
-        }
-        
-        # Add milestone completion - update based on whether edits were made
-        if (milestone_edits_made) {
-          # If edits were made, mark milestones as now acceptable
-          ccc_data$ccc_mile <- "1"  # Yes - now acceptable after edits
-        } else {
-          # Use the original input value
-          ccc_data$ccc_mile <- input$ccc_mile
-        }
-        
-        # Add milestone concerns/changes comments
-        if (!is.null(input$ccc_mile_concerns) && input$ccc_mile_concerns != "") {
-          if (milestone_edits_made) {
-            ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
-          } else {
-            ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
+          message("Processing ccc_action checkbox values: ", paste(input$ccc_action, collapse = ", "))
+          
+          # Create individual checkbox fields for each selected action
+          for (action_value in input$ccc_action) {
+            field_name <- paste0("ccc_action___", action_value)
+            ccc_data[[field_name]] <- "1"  # REDCap checkbox: 1 = checked, 0 = unchecked
+            message("Adding checkbox field: ", field_name, " = 1")
           }
         }
         
-        # Add additional comments if provided
-        if (!is.null(input$ccc_comments) && input$ccc_comments != "") {
+        # CHECKBOX: Action Status (ccc_action_status___1, ccc_action_status___2, etc.)
+        if (!is.null(input$ccc_action_status) && length(input$ccc_action_status) > 0) {
+          message("Processing ccc_action_status checkbox values: ", paste(input$ccc_action_status, collapse = ", "))
+          
+          # Create individual checkbox fields for each selected status
+          for (status_value in input$ccc_action_status) {
+            field_name <- paste0("ccc_action_status___", status_value)
+            ccc_data[[field_name]] <- "1"  # REDCap checkbox: 1 = checked
+            message("Adding checkbox field: ", field_name, " = 1")
+          }
+        }
+        
+        # CHECKBOX: Competency areas (ccc_competency___1, ccc_competency___2, etc.)
+        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
+          message("Processing ccc_competency checkbox values: ", paste(input$ccc_competency, collapse = ", "))
+          
+          # Create individual checkbox fields for each selected competency
+          for (competency_value in input$ccc_competency) {
+            field_name <- paste0("ccc_competency___", competency_value)
+            ccc_data[[field_name]] <- "1"  # REDCap checkbox: 1 = checked
+            message("Adding checkbox field: ", field_name, " = 1")
+          }
+        }
+      }
+      
+      # Add scheduled review specific fields (these are ONLY for scheduled reviews)
+      if (input$ccc_rev_type == "1") {
+        
+        # ILP comments
+        if (!is.null(input$ccc_ilp) && nzchar(trimws(input$ccc_ilp))) {
+          ccc_data$ccc_ilp <- input$ccc_ilp
+        }
+        
+        # Follow-up actions (only if checkbox is checked)
+        if (!is.null(input$has_action_items) && input$has_action_items &&
+            !is.null(input$ccc_issues_follow_up) && nzchar(trimws(input$ccc_issues_follow_up))) {
+          ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
+        }
+        
+        # Milestone completion status (NOT for Intern Intro session = 7)
+        if (!is.null(input$ccc_session) && input$ccc_session != "7") {
+          if (milestone_edits_made) {
+            ccc_data$ccc_mile <- "1"  # Now acceptable after edits
+          } else {
+            ccc_data$ccc_mile <- input$ccc_mile %||% "1"  # Default to acceptable
+          }
+          
+          # Milestone comments
+          if (!is.null(input$ccc_mile_concerns) && nzchar(trimws(input$ccc_mile_concerns))) {
+            if (milestone_edits_made) {
+              ccc_data$ccc_mile_notes <- paste0("Milestone edits made: ", input$ccc_mile_concerns)
+            } else {
+              ccc_data$ccc_mile_notes <- input$ccc_mile_concerns
+            }
+          }
+        }
+        
+        # Additional comments
+        if (!is.null(input$ccc_comments) && nzchar(trimws(input$ccc_comments))) {
           ccc_data$ccc_comments <- input$ccc_comments
         }
       }
@@ -1521,11 +1686,21 @@ server <- function(input, output, session) {
       # Set completion status
       ccc_data$ccc_review_complete <- "2"  # 2 = Complete
       
-      # Build JSON data for REDCap submission
+      # Debug: Log what we're about to submit
+      message("=== CCC Data to Submit (with proper checkbox fields) ===")
+      message("Review Type: ", input$ccc_rev_type, " (", 
+              if(input$ccc_rev_type == "1") "Scheduled" else "Interim", ")")
+      message("Session/Instance: ", ccc_session_value)
+      for (field in names(ccc_data)) {
+        message(paste(field, ":", ccc_data[[field]]))
+      }
+      message("========================")
+      
+      # STEP 4: Build JSON for REDCap submission
       json_data <- paste0(
-        '[{"record_id":"', escape_json_string(record_id),
-        '","redcap_repeat_instrument":"ccc_review",',
-        '"redcap_repeat_instance":"', escape_json_string(ccc_session_value), '"'
+        '[{"record_id":"', escape_json_string(as.character(record_id)), '"',
+        ',"redcap_repeat_instrument":"ccc_review"',
+        ',"redcap_repeat_instance":"', escape_json_string(as.character(ccc_session_value)), '"'
       )
       
       # Add all CCC fields to JSON
@@ -1536,52 +1711,73 @@ server <- function(input, output, session) {
         }
       }
       
-      # Close the JSON
       json_data <- paste0(json_data, "}]")
       
-      message("CCC review JSON (first 200 chars): ", substr(json_data, 1, 200))
+      message("CCC review JSON with checkbox fields (first 500 chars): ", substr(json_data, 1, 500))
       
-      # Submit to REDCap
-      response <- httr::POST(
-        url = redcap_url,
-        body = list(
-          token = token,
-          content = "record",
-          format = "json",
-          type = "flat",
-          overwriteBehavior = "normal",
-          forceAutoNumber = "false",
-          data = json_data,
-          returnContent = "count",
-          returnFormat = "json"
-        ),
-        encode = "form"
-      )
+      # STEP 5: Submit to REDCap
+      response <- tryCatch({
+        httr::POST(
+          url = redcap_url,
+          body = list(
+            token = token,
+            content = "record",
+            format = "json",
+            type = "flat",
+            overwriteBehavior = "normal",
+            forceAutoNumber = "false",
+            data = json_data,
+            returnContent = "count",
+            returnFormat = "json"
+          ),
+          encode = "form",
+          httr::timeout(30)
+        )
+      }, error = function(e) {
+        return(list(status_code = 0, error = e$message))
+      })
       
-      # Process response (existing logic continues...)
+      # STEP 6: Process response
+      if ("error" %in% names(response)) {
+        showNotification(paste("HTTP error:", response$error), type = "error", duration = 10)
+        return()
+      }
+      
       status_code <- httr::status_code(response)
       content_text <- httr::content(response, "text", encoding = "UTF-8")
       
       message("CCC review REDCap response status: ", status_code)
       message("CCC review REDCap response content: ", content_text)
       
+      # Check for specific REDCap field errors
+      if (status_code != 200 || grepl("fields were not found", content_text)) {
+        message("POSSIBLE FIELD ERROR - REDCap Response: ", content_text)
+        showNotification(
+          paste("REDCap field error: ", content_text, 
+                ". Please check your REDCap project structure."), 
+          type = "error", 
+          duration = 15
+        )
+        return()
+      }
+      
       if (status_code == 200) {
-        # Parse response to check if records were actually updated
         tryCatch({
-          # Check if response is JSON format
           if (grepl("^\\{", content_text)) {
-            # Parse JSON response
             response_json <- jsonlite::fromJSON(content_text)
             records_updated <- as.numeric(response_json$count)
           } else {
-            # Parse plain number response
             records_updated <- as.numeric(content_text)
           }
           
           if (!is.na(records_updated) && records_updated > 0) {
-            # Show success message
-            showNotification(paste("CCC review successfully submitted! (", records_updated, " record updated)"), 
-                             type = "message", duration = 5)
+            success_message <- if (milestone_edits_made) {
+              paste0("CCC review and milestone edits successfully submitted! (", records_updated, " record updated)")
+            } else {
+              paste0("CCC review successfully submitted! (", records_updated, " record updated)")
+            }
+            
+            showNotification(success_message, type = "message", duration = 5)
             
             # Navigate back to dashboard
             shinyjs::hide("ccc-review-pages")
@@ -1595,17 +1791,22 @@ server <- function(input, output, session) {
             values$redcap_period <- NULL
             
           } else {
-            # No records updated - show error
             showNotification("Error: No records were updated in REDCap. Please try again.", 
                              type = "error", duration = 10)
           }
-        }, error = function(e) {
-          # JSON parsing error - but if we got here with status 200, it probably worked
-          message("Parse error but status 200, assuming success: ", e$message)
-          showNotification("CCC review submitted successfully!", 
-                           type = "message", duration = 5)
           
-          # Navigate back to dashboard anyway since we got HTTP 200
+        }, error = function(e) {
+          message("Parse error but HTTP 200, assuming success: ", e$message)
+          
+          success_message <- if (milestone_edits_made) {
+            "CCC review and milestone edits submitted successfully!"
+          } else {
+            "CCC review submitted successfully!"
+          }
+          
+          showNotification(success_message, type = "message", duration = 5)
+          
+          # Navigate back to dashboard
           shinyjs::hide("ccc-review-pages")
           shinyjs::delay(100, {
             shinyjs::show("ccc-dashboard-page")
@@ -1616,13 +1817,36 @@ server <- function(input, output, session) {
           values$current_period <- NULL
           values$redcap_period <- NULL
         })
+        
       } else {
-        # HTTP error
-        showNotification(paste("Error submitting CCC review:", content_text), 
-                         type = "error", duration = 10)
+        if (grepl("Form Status field", content_text)) {
+          success_message <- if (milestone_edits_made) {
+            "CCC review and milestone edits saved (form status warning ignored)"
+          } else {
+            "CCC review saved (form status warning ignored)"
+          }
+          
+          showNotification(success_message, type = "message", duration = 5)
+          
+          # Navigate back to dashboard
+          shinyjs::hide("ccc-review-pages")
+          shinyjs::delay(100, {
+            shinyjs::show("ccc-dashboard-page")
+          })
+          
+          # Reset resident selection
+          values$selected_resident <- NULL
+          values$current_period <- NULL
+          values$redcap_period <- NULL
+          
+        } else {
+          showNotification(paste("REDCap error (", status_code, "):", content_text), 
+                           type = "error", duration = 10)
+        }
       }
     })
   })
+  
   
   # Update the submit button validation logic
   output$ccc_submit_button <- renderUI({

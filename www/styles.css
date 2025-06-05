@@ -72,6 +72,89 @@
   color: white;
 }
 
+/* Enhanced status dots - nearly twice as big */
+.status-dot {
+    width: 20px !important;          /* Was ~12px, now 20px */
+    height: 20px !important;         /* Was ~12px, now 20px */
+    border-radius: 50% !important;
+    display: inline-block !important;
+    margin: 0 auto !important;
+    border: 2px solid rgba(255,255,255,0.3) !important;  /* Add subtle border */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;    /* Add shadow for depth */
+}
+
+.status-complete {
+    background-color: #28a745 !important;  /* Green - complete */
+    box-shadow: 0 2px 6px rgba(40, 167, 69, 0.4) !important;
+}
+
+.status-incomplete {
+    background-color: #dc3545 !important;  /* Red - incomplete */
+    box-shadow: 0 2px 6px rgba(220, 53, 69, 0.4) !important;
+}
+
+/* Enhanced filter buttons */
+.btn-lg.px-4.py-2 {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    min-width: 140px !important;
+    transition: all 0.2s ease !important;
+    border: none !important;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+}
+
+.btn-lg.px-4.py-2:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2) !important;
+}
+
+/* Enhanced search bar */
+.input-group-lg .form-control {
+    border: 2px solid #e0e0e0 !important;
+    border-radius: 8px 0 0 8px !important;
+    transition: border-color 0.3s ease !important;
+}
+
+.input-group-lg .form-control:focus {
+    border-color: #007bff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25) !important;
+}
+
+.input-group-lg .input-group-text {
+    border: 2px solid #e0e0e0 !important;
+    border-left: none !important;
+    border-radius: 0 8px 8px 0 !important;
+    background-color: #f8f9fa !important;
+}
+
+/* Table enhancements */
+.table-instruction {
+    color: #007bff !important;
+    margin-bottom: 20px !important;
+    padding: 15px !important;
+    background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%) !important;
+    border-radius: 8px !important;
+    border-left: 4px solid #007bff !important;
+}
+
+/* DataTable search enhancement */
+.dataTables_filter {
+    display: none !important;  /* Hide default search since we have our own */
+}
+
+/* Card enhancements */
+div[data-card-type="filters"] {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+    border: none !important;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+}
+
+div[data-card-type="resident-table"] {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+    border: none !important;
+}
+
 /* ============================================================================
    ENHANCED RESIDENT INFO PANEL - BLUE THEME
    ============================================================================ */

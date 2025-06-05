@@ -1,4 +1,8 @@
-# Fixed UI Definition - Main Content Area
+# ============================================================================
+# FIXED UI - Grammar/Structure Issue Corrected
+# Replace your entire ui.R with this corrected version
+# ============================================================================
+
 ui <- page_fluid(
   theme = bs_theme(
     version = 5,
@@ -135,7 +139,7 @@ ui <- page_fluid(
                   ),
                   actionButton(
                     "select_coaching",
-                    "Start ILP Review",
+                    "Start CCC Review",
                     class = "btn-primary btn-lg mt-3",
                     icon = icon("arrow-right")
                   )
@@ -226,7 +230,7 @@ ui <- page_fluid(
       div(
         id = "ccc-dashboard-page",
         
-        # Filter buttons
+        # Enhanced Filter buttons with larger, solid styling
         fluidRow(
           column(
             width = 12,
@@ -235,25 +239,49 @@ ui <- page_fluid(
                           `data-card-type` = "filters"
               ),
               card_body(
+                # Centered heading
                 div(
-                  class = "d-flex flex-wrap gap-2 mb-3",
-                  actionButton("filter_by_level", "Sort by Level", class = "btn-outline-primary btn-sm"),
-                  actionButton("filter_fully_complete", "Fully Complete", class = "btn-outline-success btn-sm"),
-                  actionButton("filter_self_done_others_pending", "Self-Eval Done", class = "btn-outline-warning btn-sm"),
-                  actionButton("filter_coach_done_second_pending", "Coach Done", class = "btn-outline-info btn-sm"),
-                  actionButton("filter_reviews_done_ccc_pending", "Reviews Done", class = "btn-outline-secondary btn-sm"),
-                  actionButton("clear_filters", "Clear Filters", class = "btn-outline-danger btn-sm")
+                  class = "text-center mb-3",
+                  h5("Quick Filters", class = "text-primary fw-bold")
                 ),
-                tags$small(
-                  class = "text-muted",
-                  "Use these filters to show specific subsets of residents based on completion status."
+                
+                # Enhanced filter buttons - larger and solid
+                div(
+                  class = "d-flex flex-wrap justify-content-center gap-3 mb-4",
+                  actionButton("filter_by_level", 
+                               "Sort by Level", 
+                               class = "btn-primary btn-lg px-4 py-2"),
+                  actionButton("filter_fully_complete", 
+                               "Fully Complete", 
+                               class = "btn-success btn-lg px-4 py-2"),
+                  actionButton("filter_self_done_others_pending", 
+                               "Self-Eval Done", 
+                               class = "btn-warning btn-lg px-4 py-2"),
+                  actionButton("filter_coach_done_second_pending", 
+                               "Coach Done", 
+                               class = "btn-info btn-lg px-4 py-2"),
+                  actionButton("filter_reviews_done_ccc_pending", 
+                               "Reviews Done", 
+                               class = "btn-secondary btn-lg px-4 py-2"),
+                  actionButton("clear_filters", 
+                               "Clear Filters", 
+                               class = "btn-danger btn-lg px-4 py-2")
+                ),
+                
+                # Help text
+                div(
+                  class = "text-center",
+                  tags$small(
+                    class = "text-muted",
+                    "Use these filters to show specific subsets of residents based on completion status."
+                  )
                 )
               )
             )
           )
         ),
         
-        # Main residents table
+        # Enhanced Main residents table with bigger search bar
         fluidRow(
           column(
             width = 12,
@@ -262,23 +290,63 @@ ui <- page_fluid(
                           `data-card-type` = "resident-table"
               ),
               card_body(
-                p(
-                  class = "mb-3 text-center fw-bold table-instruction",
-                  "Click on a resident row to start the review process"
+                # Centered search instructions
+                div(
+                  class = "text-center mb-4",
+                  p(
+                    class = "fw-bold table-instruction fs-5 text-primary",
+                    "Click on a resident row to start the review process"
+                  )
                 ),
+                
+                # Enhanced search bar - centered and larger
+                div(
+                  class = "d-flex justify-content-center mb-4",
+                  div(
+                    class = "col-md-6 col-lg-4",
+                    div(
+                      class = "input-group input-group-lg",
+                      tags$input(
+                        type = "text",
+                        class = "form-control form-control-lg",
+                        id = "global_search",
+                        placeholder = "Search residents by name, level, coach...",
+                        style = "font-size: 18px; padding: 12px 16px; border-radius: 8px;"
+                      ),
+                      span(
+                        class = "input-group-text",
+                        icon("search", class = "text-primary")
+                      )
+                    )
+                  )
+                ),
+                
+                # The data table
                 DT::dataTableOutput("ccc_residents_table")
               )
             )
           )
         )
-      ),
+      ), # FIXED: This closes the ccc-dashboard-page div properly
       
       # ============================================================================
-      # CCC REVIEW PAGES (Individual resident review) - RESTORED WORKING VERSION
+      # CCC REVIEW PAGES (Individual resident review)
       # ============================================================================
       div(
         id = "ccc-review-pages",
         style = "display: none;",
+        
+        # Back button for review pages
+        fluidRow(
+          column(12,
+                 div(
+                   class = "mb-3",
+                   actionButton("back_to_dashboard", "← Back to Dashboard", 
+                                class = "btn-secondary"),
+                   span(" > Review Details", class = "text-muted ms-2")
+                 )
+          )
+        ),
         
         fluidRow(
           # LEFT COLUMN - Coach ILP Summary, Secondary Review, CCC Comments, and Concerns
@@ -307,7 +375,6 @@ ui <- page_fluid(
                             `data-card-type` = "secondary-review"
                 ),
                 card_body(
-                  # Just display the existing secondary review data as text
                   div(
                     class = "secondary-review-display",
                     uiOutput("secondary_review_display")
@@ -343,7 +410,7 @@ ui <- page_fluid(
                           `data-card-type` = "ccc-concerns"
               ),
               card_body(
-                # Concerns - matches REDCap ccc_concern field
+                # Concerns - available for both scheduled and interim reviews
                 radioButtons(
                   "ccc_concern",
                   "Any concerns of the CCC?",
@@ -354,18 +421,18 @@ ui <- page_fluid(
                   selected = character(0)
                 ),
                 
-                # CCC Actions - APPEARS ON LEFT when concerns = Yes
+                # CCC Actions and Competencies - APPEARS when concerns = Yes (for ANY review type)
                 conditionalPanel(
                   condition = "input.ccc_concern == '1'",
                   div(
                     class = "alert alert-warning mb-3",
                     tags$p(
                       tags$strong("Concerns have been identified."),
-                      " Please specify the actions below."
+                      " Please specify the actions and competency areas below."
                     )
                   ),
                   
-                  # Actions suggested by CCC - matches REDCap ccc_action field
+                  # Actions suggested by CCC - available for both scheduled and interim
                   checkboxGroupInput(
                     "ccc_action",
                     "Actions suggested by CCC:",
@@ -381,7 +448,23 @@ ui <- page_fluid(
                     selected = character(0)
                   ),
                   
-                  # Competency areas - matches REDCap ccc_competency field  
+                  # Action Status - appears when actions are selected (for any review type)
+                  conditionalPanel(
+                    condition = "input.ccc_action && input.ccc_action.length > 0",
+                    checkboxGroupInput(
+                      "ccc_action_status",
+                      "Status of action item:",
+                      choices = c(
+                        "Initiation" = "1",
+                        "Ongoing" = "2",
+                        "Resolved" = "3",
+                        "Recurring" = "4"
+                      ),
+                      selected = character(0)
+                    )
+                  ),
+                  
+                  # Competency areas - available for both scheduled and interim
                   checkboxGroupInput(
                     "ccc_competency",
                     "Which area(s) of competence, if any? (can select more than one):",
@@ -398,15 +481,23 @@ ui <- page_fluid(
                   )
                 ),
                 
-                # Issues for follow up - ONLY for Scheduled Reviews
+                # Action Items Checkbox - available for both review types
+                hr(),
+                checkboxInput(
+                  "has_action_items",
+                  "Are there action items for program follow-up?",
+                  value = FALSE
+                ),
+                
+                # Issues for follow up - appears when action items checkbox is checked (any review type)
                 conditionalPanel(
-                  condition = "input.ccc_rev_type == '1'",
+                  condition = "input.has_action_items",
                   textAreaInput(
                     "ccc_issues_follow_up",
-                    "Issues for the Program to deal with or follow up / action items? (Type NA if none):",
+                    "Issues for the Program to deal with or follow up / action items:",
                     rows = 4,
                     width = "100%",
-                    placeholder = "Enter any issues for program follow-up or type 'NA' if none..."
+                    placeholder = "Enter any issues for program follow-up..."
                   )
                 ),
                 
@@ -424,6 +515,7 @@ ui <- page_fluid(
             )
           ),
           
+          # RIGHT COLUMN
           column(
             width = 6,
             
@@ -585,4 +677,4 @@ ui <- page_fluid(
       )
     ) # End of ccc-pages div
   ) # End of main-content div
-)
+) # End of page_fluid

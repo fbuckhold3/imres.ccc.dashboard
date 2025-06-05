@@ -113,6 +113,9 @@ get_current_period <- function(current_date = Sys.Date()) {
   }
 }
 
+# FIXED MAPPING FUNCTION - Add this to R/helpers.R
+# Replace the existing map_period_format function
+
 #' Map Period and Level to Various Formats - FIXED VERSION
 #'
 #' Maps the app's period and resident level to different formats used in the app
@@ -137,7 +140,7 @@ map_period_format <- function(level, period, return_type = "instance", form_cont
     if (return_type == "milestone" || return_type == "readable" || return_type == "ccc") return(NA)
   }
   
-  # Define mappings with form-specific handling for final period
+  # FIXED: Define mappings with correct instances for standard periods
   mappings <- list(
     "Intern" = list(
       "Intern Intro" = list(
@@ -152,10 +155,22 @@ map_period_format <- function(level, period, return_type = "instance", form_cont
         readable = "Mid Intern",
         ccc = "Mid Intern"
       ),
+      "Mid Intern" = list(  # ADDED: Direct mapping for Mid Intern
+        instance = 1,
+        milestone = "Mid Intern", 
+        readable = "Mid Intern",
+        ccc = "Mid Intern"
+      ),
       "End Review" = list(
-        instance = 2,
+        instance = 2,  # FIXED: Should be 2, not 8
         milestone = "End Intern",
         readable = "End Intern",
+        ccc = "End Intern"
+      ),
+      "End Intern" = list(  # ADDED: Direct mapping for End Intern
+        instance = 2,  # FIXED: Should be 2, not 8
+        milestone = "End Intern",
+        readable = "End Intern", 
         ccc = "End Intern"
       )
     ),
@@ -172,7 +187,19 @@ map_period_format <- function(level, period, return_type = "instance", form_cont
         readable = "Mid PGY2",
         ccc = "Mid PGY2"
       ),
+      "Mid PGY2" = list(  # ADDED: Direct mapping
+        instance = 3,
+        milestone = "Mid PGY2",
+        readable = "Mid PGY2",
+        ccc = "Mid PGY2"
+      ),
       "End Review" = list(
+        instance = 4,
+        milestone = "End PGY2",
+        readable = "End PGY2",
+        ccc = "End PGY2"
+      ),
+      "End PGY2" = list(  # ADDED: Direct mapping
         instance = 4,
         milestone = "End PGY2",
         readable = "End PGY2",
@@ -192,19 +219,39 @@ map_period_format <- function(level, period, return_type = "instance", form_cont
         readable = "Mid PGY3",
         ccc = "Mid PGY3"
       ),
+      "Mid PGY3" = list(  # ADDED: Direct mapping
+        instance = 5,
+        milestone = "Mid PGY3",
+        readable = "Mid PGY3",
+        ccc = "Mid PGY3"
+      ),
       "End Review" = list(
         instance = 6,
         # FIXED: Use form context to determine correct term
         milestone = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating",
         readable = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating",
         ccc = "Graduation"  # CCC always uses "Graduation"
+      ),
+      "Graduation" = list(  # ADDED: Direct mapping
+        instance = 6,
+        milestone = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating",
+        readable = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating",
+        ccc = "Graduation"
+      ),
+      "Graduating" = list(  # ADDED: Direct mapping
+        instance = 6,
+        milestone = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating",
+        readable = if(form_context %in% c("ccc_review", "second_review")) "Graduation" else "Graduating", 
+        ccc = "Graduation"
       )
     )
   )
   
   # Look up the mapping
   if (level %in% names(mappings) && period %in% names(mappings[[level]])) {
-    return(mappings[[level]][[period]][[return_type]])
+    result <- mappings[[level]][[period]][[return_type]]
+    message("Found direct mapping for ", level, " + ", period, " -> ", return_type, ": ", result)
+    return(result)
   } else {
     # Default case
     warning(paste("No mapping found for level:", level, "and period:", period))
