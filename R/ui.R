@@ -348,6 +348,53 @@ ui <- page_fluid(
           )
         ),
         
+        # Milestone Plots Section
+        fluidRow(
+          column(
+            width = 12,
+            card(
+              card_header("Milestone Assessments",
+                          `data-card-type` = "milestone-plots"
+              ),
+              card_body(
+                fluidRow(
+                  # Self-Assessment Milestones Plot
+                  column(
+                    width = 6,
+                    div(
+                      class = "text-center mb-3",
+                      h5("Current Self-Assessment", class = "text-primary"),
+                      p("Resident's self-evaluation for this period", class = "text-muted small")
+                    ),
+                    div(
+                      class = "milestone-plot-container",
+                      style = "min-height: 400px;",
+                      plotOutput("self_milestones_plot", height = "400px")
+                    )
+                  ),
+                  
+                  # Program Milestones Plot  
+                  column(
+                    width = 6,
+                    div(
+                      class = "text-center mb-3",
+                      h5("Current Program Assessment", class = "text-success"),
+                      p("Faculty assessment for this period", class = "text-muted small")
+                    ),
+                    div(
+                      class = "milestone-plot-container", 
+                      style = "min-height: 400px;",
+                      plotOutput("program_milestones_plot", height = "400px")
+                    )
+                  )
+                )
+              )
+            )
+          )
+        ),
+        
+        br(), # Add some spacing before the main review form
+        
         fluidRow(
           # LEFT COLUMN - Coach ILP Summary, Secondary Review, CCC Comments, and Concerns
           column(
