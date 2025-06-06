@@ -2,6 +2,27 @@
 # CONSOLIDATED REDCap INSTANCE AND PERIOD MAPPING FUNCTIONS
 # ============================================================================
 # Replace ALL the overlapping functions in R/redcap_submission.R with these
+# 
+# 
+# Quick fix for missing escape_json_string function
+if (!exists("escape_json_string")) {
+  escape_json_string <- function(x) {
+    if (is.null(x) || is.na(x)) return("")
+    x <- as.character(x)
+    x <- gsub('\\\\', '\\\\\\\\', x)
+    x <- gsub('"', '\\\\"', x)
+    x <- gsub('\n', '\\\\n', x)
+    x <- gsub('\r', '\\\\r', x)
+    x <- gsub('\t', '\\\\t', x)
+    return(x)
+  }
+}
+
+# Also define the null-coalescing operator if missing
+if (!exists("%||%")) {
+  `%||%` <- function(a, b) if (is.null(a)) b else a
+}
+
 
 #' Get REDCap Instance Number - CONSOLIDATED VERSION
 #' 
