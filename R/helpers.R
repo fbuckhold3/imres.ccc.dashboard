@@ -1886,3 +1886,62 @@ get_discussion_topics <- function(resident_name, current_period, resident_data) 
   return(NULL)
 }
 
+#' Check if milestone data exists for a resident and period
+#'
+#' @param milestone_data The milestone data (p_miles from app_data)
+#' @param resident_name Name of the resident
+#' @param period The period to check for
+#' @return TRUE if milestones exist, FALSE if they don't
+check_milestones_exist <- function(milestone_data, resident_name, period) {
+  
+  message("Checking milestones for resident: ", resident_name, ", period: ", period)
+  
+  if (is.null(milestone_data) || is.null(resident_name) || is.null(period)) {
+    message("Missing required parameters for milestone check")
+    return(FALSE)
+  }
+  
+  if (!is.data.frame(milestone_data) || nrow(milestone_data) == 0) {
+    message("No milestone data available")
+    return(FALSE)
+  }
+  
+  # Filter for this resident and period
+  resident_milestones <- milestone_data %>%
+    filter(name == resident_name, period == period)
+  
+  message("Found ", nrow(resident_milestones), " milestone records for this resident/period")
+  
+  if (nrow(resident_milestones) == 0) {
+    message("No milestones found for this resident and period")
+    return(FALSE)
+  }
+  
+  # Check if there are actual milestone scores (not just empty records)
+  # Look for key milestone fields
+  milestone_fields <- c("rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
+                        "rep_mk1", "rep_mk2", "rep_mk3", "rep_sbp1", "rep_sbp2", "rep_sbp3",
+                        "rep_pbl1", "rep_pbl2", "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
+                        "rep_ics1", "rep_ics2", "rep_ics3")
+  
+  # Check which milestone fields exist in the data
+  existing_milestone_fields <- intersect(milestone_fields, names(resident_milestones))
+  
+  if (length(existing_milestone_fields) == 0) {
+    message("No milestone score fields found in data")
+    return(FALSE)
+  }
+  
+  # Check if any milestone fields have non-zero, non-NA values
+  has_scores <- FALSE
+  for (field in existing_milestone_fields) {
+    field_values <- resident_milestones[[field]]
+    if (any(!is.na(field_values) & field_values > 0, na.rm = TRUE)) {
+      has_scores <- TRUE
+      break
+    }
+  }
+  
+  message("Has actual milestone scores: ", has_scores)
+  return(has_scores)
+}

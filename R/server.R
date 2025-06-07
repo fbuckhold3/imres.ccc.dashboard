@@ -33,7 +33,7 @@ server <- function(input, output, session) {
     return(data)
   })
   
-  # Add this function to your helpers.R or include it in server.R
+  # Setup milestone images
   setup_milestone_images <- function() {
     # Check if milestone images directory exists in imres package
     milestones_path <- system.file("www", "milestones", package = "imres")
@@ -49,6 +49,80 @@ server <- function(input, output, session) {
   
   # Call this in your server initialization
   milestone_images_available <- setup_milestone_images()
+  
+  # Helper function to check if milestones exist
+  check_milestones_exist <- function(milestone_data, resident_name, period) {
+    if (is.null(milestone_data) || is.null(resident_name) || is.null(period)) {
+      return(FALSE)
+    }
+    
+    # Check if there's any milestone data for this resident and period
+    has_data <- any(
+      milestone_data$name == resident_name & 
+        milestone_data$period == period, 
+      na.rm = TRUE
+    )
+    
+    message("Checking milestones for ", resident_name, " in period ", period, ": ", has_data)
+    return(has_data)
+  }
+  
+  milestones_exist <- reactive({
+    req(values$selected_resident)
+    req(values$redcap_period)
+    
+    data <- app_data()
+    
+    if (is.null(data$p_miles)) {
+      message("No program milestone data available")
+      return(FALSE)
+    }
+    
+    # Use the helper function to check if milestones exist
+    exists <- check_milestones_exist(
+      milestone_data = data$p_miles,
+      resident_name = values$selected_resident$name,
+      period = values$redcap_period
+    )
+    
+    message("Milestones exist for ", values$selected_resident$name, " in period ", values$redcap_period, ": ", exists)
+    return(exists)
+  })
+  
+  # Track milestone entry state
+  milestone_entry_state <- reactiveValues(
+    should_enter = FALSE,  # Whether user wants to enter milestones
+    entry_complete = FALSE  # Whether milestone entry has been completed
+  )
+  
+  # Function to clear form inputs
+  clear_ccc_form_inputs <- function(session) {
+    # Clear all text inputs
+    updateTextAreaInput(session, "ccc_interim", value = "")
+    updateTextAreaInput(session, "ccc_ilp", value = "")
+    updateTextAreaInput(session, "ccc_issues_follow_up", value = "")
+    updateTextAreaInput(session, "ccc_comments", value = "")
+    updateTextAreaInput(session, "ccc_mile_concerns", value = "")
+    updateTextAreaInput(session, "ccc_concern_notes", value = "")  # ADD THIS LINE
+    updateTextInput(session, "ccc_fu_resp", value = "")
+    
+    # Clear radio buttons
+    updateRadioButtons(session, "ccc_rev_type", selected = character(0))
+    updateRadioButtons(session, "ccc_concern", selected = character(0))
+    updateRadioButtons(session, "ccc_mile", selected = character(0))
+    updateRadioButtons(session, "ccc_enter_milestones", selected = character(0))
+    
+    # Clear select inputs
+    updateSelectInput(session, "ccc_session", selected = "")
+    
+    # Clear checkbox inputs
+    updateCheckboxGroupInput(session, "ccc_action", selected = character(0))
+    updateCheckboxGroupInput(session, "ccc_action_status", selected = character(0))
+    updateCheckboxGroupInput(session, "ccc_competency", selected = character(0))
+    updateCheckboxInput(session, "has_action_items", value = FALSE)
+    
+    message("CCC form inputs cleared")
+  }
   
   # ============================================================================
   # ACCESS CODE AUTHENTICATION
@@ -86,10 +160,10 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # NAVIGATION SELECTION HANDLERS - FIXED
+  # NAVIGATION SELECTION HANDLERS
   # ============================================================================
   
-  # FIXED: Handle "ILP and Milestone Review" selection
+  # Handle "ILP and Milestone Review" selection
   observeEvent(input$select_coaching, {
     values$selected_navigation <- "coaching"
     shinyjs::hide("navigation-page")
@@ -142,7 +216,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # PROCESSED RESIDENT DATA - Your exact working function
+  # PROCESSED RESIDENT DATA
   # ============================================================================
   
   processed_resident_data <- reactive({
@@ -165,7 +239,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # TABLE FUNCTION - Your exact working version
+  # DATATABLE FUNCTION
   # ============================================================================
   
   datatable_with_click_and_single_search <- function(data, caption = NULL) {
@@ -294,7 +368,7 @@ server <- function(input, output, session) {
   }
   
   # ============================================================================
-  # STATUS CHECKING FUNCTIONS - Your exact working versions
+  # STATUS CHECKING FUNCTIONS
   # ============================================================================
   
   # Check self-evaluation completeness
@@ -593,7 +667,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # MAIN CCC RESIDENTS TABLE WITH FILTERING - Your exact working version
+  # MAIN CCC RESIDENTS TABLE WITH FILTERING
   # ============================================================================
   
   output$ccc_residents_table <- DT::renderDataTable({
@@ -844,6 +918,9 @@ server <- function(input, output, session) {
         
         message("Mapped period: ", values$redcap_period)
         
+        # Clear form inputs when new resident is selected
+        clear_ccc_form_inputs(session)
+        
         # Navigate to detail view
         message("Attempting to navigate to detail view...")
         
@@ -914,6 +991,8 @@ server <- function(input, output, session) {
     
     # Hide review pages
     shinyjs::hide("ccc-review-pages")
+    shinyjs::hide("milestone-review-section")
+    shinyjs::show("scheduled-step-2")
     
     # Small delay then show dashboard
     shinyjs::delay(100, {
@@ -925,6 +1004,9 @@ server <- function(input, output, session) {
     values$selected_resident <- NULL
     values$current_period <- NULL
     values$redcap_period <- NULL
+    
+    # Clear form inputs
+    clear_ccc_form_inputs(session)
     
     showNotification("Returned to CCC dashboard", type = "message")
   })
@@ -965,7 +1047,105 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # MILESTONE PLOTS - Using your existing functions
+  # CCC REVIEW WORKFLOW NAVIGATION
+  # ============================================================================
+  
+  observeEvent(input$proceed_to_milestones, {
+    req(input$ccc_rev_type == "1")  # Only for scheduled reviews
+    req(input$ccc_session)
+    
+    # Validate Step 2 is complete
+    validation_errors <- character(0)
+    
+    # Check required fields
+    if (is.null(input$ccc_concern) || input$ccc_concern == "") {
+      validation_errors <- c(validation_errors, "Please indicate if there are concerns")
+    }
+    
+    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
+        validation_errors <- c(validation_errors, "Please select at least one CCC action")
+      }
+      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
+        validation_errors <- c(validation_errors, "Please select at least one competency area")
+      }
+    }
+    
+    if (length(validation_errors) > 0) {
+      showNotification(
+        paste("Please complete the following before proceeding:", 
+              paste(validation_errors, collapse = "; ")),
+        type = "error",
+        duration = 8
+      )
+      return()
+    }
+    
+    # Hide Step 2 and show Step 3
+    shinyjs::hide("scheduled-step-2")
+    shinyjs::show("milestone-review-section")
+    
+    # Scroll to top
+    shinyjs::runjs("window.scrollTo(0, 0);")
+    
+    showNotification("Proceeding to milestone review", type = "message")
+  })
+  
+  observeEvent(input$back_to_step2, {
+    shinyjs::hide("milestone-review-section")
+    shinyjs::show("scheduled-step-2")
+    
+    # Scroll to top
+    shinyjs::runjs("window.scrollTo(0, 0);")
+    
+    showNotification("Returned to review details", type = "message")
+  })
+  
+  # Open resident dashboard in new tab
+  observeEvent(input$open_resident_dashboard, {
+    req(values$selected_resident)
+    
+    access_code <- values$selected_resident$access_code
+    dashboard_url <- "https://fbuckhold3-imsluresidentdashboard.share.connect.posit.cloud"
+    
+    # JavaScript to open in new tab and try to auto-fill access code
+    js_code <- sprintf(
+      "
+    var newWindow = window.open('%s', '_blank');
+    setTimeout(function() {
+      if (newWindow && !newWindow.closed) {
+        try {
+          // Try to auto-fill the access code
+          var accessInput = newWindow.document.getElementById('access_code');
+          if (accessInput) {
+            accessInput.value = '%s';
+            // Try to submit the form
+            var submitBtn = newWindow.document.getElementById('submit_access');
+            if (submitBtn) {
+              submitBtn.click();
+            }
+          }
+        } catch(e) {
+          console.log('Cross-origin access prevented - user will need to enter code manually');
+        }
+      }
+    }, 2000);
+    ",
+      dashboard_url,
+      access_code
+    )
+    
+    shinyjs::runjs(js_code)
+    
+    showNotification(
+      paste("Opening resident dashboard. Access code:", access_code),
+      type = "message",
+      duration = 8
+    )
+  })
+  
+  # ============================================================================
+  # MILESTONE PLOTS
   # ============================================================================
   
   # Current Self-Assessment Milestone Plot
@@ -1083,7 +1263,7 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
-  # COACH ILP FINAL SUMMARY
+  # COACH ILP AND SECONDARY REVIEW DISPLAYS
   # ============================================================================
   
   output$coach_ilp_summary <- renderUI({
@@ -1213,144 +1393,73 @@ server <- function(input, output, session) {
   
   output$secondary_review_display <- renderUI({
     req(values$selected_resident)
-    req(values$current_period)
     
     # Get resident data
     resident_data <- processed_resident_data()
     
-    # Get REDCap instance number for the current period
-    current_app_period <- get_current_period()
-    instance <- map_period_format(
-      level = values$selected_resident$Level,
-      period = current_app_period,
-      return_type = "instance"
-    )
-    
-    # Try to find existing secondary review data
+    # Try to find secondary review data
     filtered_data <- resident_data %>%
       filter(name == values$selected_resident$name)
     
-    # Look for existing second review data
-    existing_approval <- NULL
-    existing_comments <- NULL
-    existing_source <- "Not specified"
+    # Look for second_comments field specifically
+    second_comments <- NULL
+    reviewer_name <- NULL
     
-    if ("second_period" %in% names(filtered_data)) {
-      period_rows <- filtered_data %>%
-        filter(second_period == as.character(instance))
-      
-      if (nrow(period_rows) > 0) {
-        # Get existing data for this specific period
-        if ("second_approve" %in% names(period_rows) && !is.na(period_rows$second_approve[1])) {
-          existing_approval <- ifelse(period_rows$second_approve[1] == "1", "Approved", "Not Approved")
-          existing_source <- "Current period secondary review"
-        }
-        
-        if ("second_comments" %in% names(period_rows) && !is.na(period_rows$second_comments[1])) {
-          existing_comments <- period_rows$second_comments[1]
-          if (existing_source == "Not specified") {
-            existing_source <- "Current period secondary review"
+    if ("second_comments" %in% names(filtered_data)) {
+      for (i in 1:nrow(filtered_data)) {
+        if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
+          second_comments <- filtered_data$second_comments[i]
+          # Get reviewer name from second_rev field if available
+          if ("second_rev" %in% names(filtered_data) && 
+              !is.na(filtered_data$second_rev[i]) && filtered_data$second_rev[i] != "") {
+            reviewer_name <- filtered_data$second_rev[i]
           }
+          break
         }
       }
     }
     
-    # If no current period data, try any existing secondary review data
-    if (is.null(existing_approval) && is.null(existing_comments)) {
-      # Try second_rev field (from your original working code)
-      if ("second_rev" %in% names(filtered_data)) {
-        for (i in 1:nrow(filtered_data)) {
-          if (!is.na(filtered_data$second_rev[i]) && filtered_data$second_rev[i] != "") {
-            existing_comments <- filtered_data$second_rev[i]
-            existing_source <- "Secondary reviewer notes"
-            break
-          }
-        }
-      }
-      
-      # Try any second_comments field
-      if (is.null(existing_comments) && "second_comments" %in% names(filtered_data)) {
-        for (i in 1:nrow(filtered_data)) {
-          if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
-            existing_comments <- filtered_data$second_comments[i]
-            existing_source <- "Most recent secondary review"
-            break
-          }
-        }
-      }
-    }
-    
-    # Create the display
-    if (!is.null(existing_approval) || !is.null(existing_comments)) {
-      # We have some data to display
+    if (!is.null(second_comments)) {
       div(
-        # Source indicator
-        tags$small(
-          class = "text-muted mb-2 d-block",
-          tags$strong("Source: "), existing_source
-        ),
-        
-        # Approval status (if available)
-        if (!is.null(existing_approval)) {
-          div(
-            class = "mb-2",
-            tags$strong("Status: "),
-            span(
-              existing_approval,
-              class = if(existing_approval == "Approved") "text-success" else "text-warning"
-            )
+        # Reviewer name if available
+        if (!is.null(reviewer_name)) {
+          tags$small(
+            class = "text-muted mb-2 d-block",
+            tags$strong("Reviewer: "), reviewer_name
           )
         },
         
-        # Comments (if available)
-        if (!is.null(existing_comments)) {
-          div(
-            class = "secondary-review-text",
-            tags$strong("Comments:"),
-            div(
-              style = "
-              background-color: #ffffff;
-              border: 1px solid #dee2e6;
-              border-radius: 4px;
-              padding: 10px;
-              margin-top: 5px;
-              line-height: 1.5;
-              max-height: 200px;
-              overflow-y: auto;
-            ",
-              # Split into paragraphs for better readability
-              lapply(strsplit(existing_comments, "\n\n")[[1]], function(para) {
-                if (para != "") tags$p(para, style = "margin-bottom: 8px;")
-              })
-            )
-          )
-        }
+        # Comments
+        div(
+          style = "
+          background-color: #ffffff;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          padding: 15px;
+          line-height: 1.6;
+          max-height: 200px;
+          overflow-y: auto;
+        ",
+          # Split into paragraphs for better readability
+          lapply(strsplit(second_comments, "\n\n")[[1]], function(para) {
+            if (para != "") tags$p(para, style = "margin-bottom: 8px;")
+          })
+        )
       )
     } else {
-      # No data found
       div(
         class = "text-muted text-center p-3",
         icon("info-circle", class = "mb-2"),
-        tags$p("No secondary review data available for this resident.")
+        tags$p("No secondary review comments available.")
       )
     }
   })
   
   # ============================================================================
-  # UPDATED CCC MILESTONE EDITING MODULE INTEGRATION
+  # MILESTONE MODULE INTEGRATION
   # ============================================================================
   
-  # Replace your existing ccc_milestone_module_ui output with this:
-  output$ccc_milestone_module_ui <- renderUI({
-    req(values$selected_resident)
-    req(values$redcap_period)
-    req(input$ccc_mile == "0")  # Only show when milestones are marked as unacceptable
-    
-    # Use the new enhanced module
-    mod_ccc_miles_ui("ccc_miles")
-  })
-  
-  # Replace your existing ccc_miles_mod initialization with this:
+  # Initialize the CCC milestone module
   ccc_miles_mod <- mod_ccc_miles_server(
     id = "ccc_miles",
     existing_data = reactive({
@@ -1372,14 +1481,324 @@ server <- function(input, output, session) {
         }
       }
       
+      message("No existing milestone data found")
       return(NULL)
     })
   )
   
- 
+  # Handle milestone entry decision
+  observeEvent(input$ccc_enter_milestones, {
+    if (!is.null(input$ccc_enter_milestones)) {
+      if (input$ccc_enter_milestones == "1") {
+        milestone_entry_state$should_enter <- TRUE
+        showNotification("Milestone entry interface will be shown below", type = "message")
+      } else {
+        milestone_entry_state$should_enter <- FALSE
+        milestone_entry_state$entry_complete <- FALSE
+      }
+    }
+  })
+  
+  # Check if second comments exist (for conditional display)
+  output$has_second_comments <- reactive({
+    req(values$selected_resident)
+    
+    resident_data <- processed_resident_data()
+    filtered_data <- resident_data %>%
+      filter(name == values$selected_resident$name)
+    
+    if ("second_comments" %in% names(filtered_data)) {
+      for (i in 1:nrow(filtered_data)) {
+        if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
+          return(TRUE)
+        }
+      }
+    }
+    return(FALSE)
+  })
+  outputOptions(output, "has_second_comments", suspendWhenHidden = FALSE)
+  
+  # Second comments display for milestone section
+  output$second_comments_display <- renderUI({
+    req(values$selected_resident)
+    
+    resident_data <- processed_resident_data()
+    filtered_data <- resident_data %>%
+      filter(name == values$selected_resident$name)
+    
+    second_comments <- NULL
+    reviewer_name <- NULL
+    
+    if ("second_comments" %in% names(filtered_data)) {
+      for (i in 1:nrow(filtered_data)) {
+        if (!is.na(filtered_data$second_comments[i]) && filtered_data$second_comments[i] != "") {
+          second_comments <- filtered_data$second_comments[i]
+          if ("second_rev" %in% names(filtered_data) && 
+              !is.na(filtered_data$second_rev[i]) && filtered_data$second_rev[i] != "") {
+            reviewer_name <- filtered_data$second_rev[i]
+          }
+          break
+        }
+      }
+    }
+    
+    if (!is.null(second_comments)) {
+      div(
+        if (!is.null(reviewer_name)) {
+          div(class = "mb-2", tags$strong("Reviewer: "), reviewer_name)
+        },
+        div(
+          style = "background-color: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff;",
+          second_comments
+        )
+      )
+    } else {
+      div(
+        class = "text-muted text-center p-3",
+        "No secondary review comments available."
+      )
+    }
+  })
+  
+  # Milestone interface content
+  output$milestone_interface_content <- renderUI({
+    req(values$selected_resident)
+    req(input$ccc_session)
+    req(input$ccc_session != "7")  # Not Intern Intro
+    
+    # Get milestone existence status
+    milestones_available <- milestones_exist()
+    
+    message("Rendering milestone interface - milestones available: ", milestones_available)
+    
+    if (milestones_available) {
+      # EXISTING MILESTONES WORKFLOW
+      tagList(
+        div(
+          class = "alert alert-success mb-3",
+          icon("check-circle", class = "me-2"),
+          tags$strong("Milestones Available:"),
+          " Program milestone assessments found for this period."
+        ),
+        
+        radioButtons(
+          "ccc_mile",
+          "Are the milestones complete and acceptable?",
+          choices = c(
+            "No - Need to edit" = "0",
+            "Yes - Acceptable" = "1"
+          ),
+          selected = character(0)
+        ),
+        
+        # Show editing interface when milestones are not acceptable
+        conditionalPanel(
+          condition = "input.ccc_mile == '0'",
+          hr(),
+          div(
+            class = "alert alert-warning mb-3",
+            icon("edit", class = "me-2"),
+            tags$strong("Edit Required:"),
+            " Please modify the milestone assessments below."
+          ),
+          
+          # Comments for edits
+          textAreaInput(
+            "ccc_mile_concerns", 
+            "Comments about milestone changes:",
+            rows = 3,
+            placeholder = "Explain what milestone changes you made and why..."
+          ),
+          
+          # Enhanced milestone editing module
+          mod_ccc_miles_ui("ccc_miles")
+        )
+      )
+      
+    } else {
+      # NO EXISTING MILESTONES WORKFLOW
+      tagList(
+        div(
+          class = "alert alert-warning mb-3",
+          icon("exclamation-triangle", class = "me-2"),
+          tags$strong("No Milestones Found:"),
+          " No program milestone assessments found for this period."
+        ),
+        
+        radioButtons(
+          "ccc_enter_milestones",
+          "Do you want to enter milestone assessments now?",
+          choices = c(
+            "No - Proceed without milestones" = "0",
+            "Yes - Enter milestone assessments" = "1"
+          ),
+          selected = character(0)
+        ),
+        
+        # Show milestone entry interface when user selects Yes
+        conditionalPanel(
+          condition = "input.ccc_enter_milestones == '1'",
+          hr(),
+          div(
+            class = "alert alert-info mb-3",
+            icon("plus-circle", class = "me-2"),
+            tags$strong("Milestone Entry Mode:"),
+            " Please assess the relevant milestones below."
+          ),
+          
+          # Comments for new entry
+          textAreaInput(
+            "ccc_mile_concerns", 
+            "Comments about milestone assessment:",
+            rows = 3,
+            placeholder = "Explain your milestone assessment rationale..."
+          ),
+          
+          # Milestone entry module (same module, different context)
+          div(
+            class = "milestone-entry-container",
+            style = "border: 2px solid #28a745; border-radius: 8px; padding: 15px; background-color: #f8fff9;",
+            h6("Enter Milestone Assessments", class = "text-success mb-3"),
+            mod_ccc_miles_ui("ccc_miles")
+          )
+        ),
+        
+        # Show status when user selects No
+        conditionalPanel(
+          condition = "input.ccc_enter_milestones == '0'",
+          div(
+            class = "alert alert-info mt-3",
+            icon("info-circle", class = "me-2"),
+            "CCC review will proceed without milestone assessment."
+          )
+        )
+      )
+    }
+  })
+  
+  # Interim submit button
+  output$interim_submit_button <- renderUI({
+    can_submit <- TRUE
+    validation_messages <- character(0)
+    
+    # Check interim notes
+    if (is.null(input$ccc_interim) || trimws(input$ccc_interim) == "") {
+      can_submit <- FALSE
+      validation_messages <- c(validation_messages, "Please provide interim review notes")
+    }
+    
+    # Check concerns
+    if (is.null(input$ccc_concern) || input$ccc_concern == "") {
+      can_submit <- FALSE
+      validation_messages <- c(validation_messages, "Please indicate if there are concerns")
+    }
+    
+    # If concerns = Yes, require action selection
+    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please select at least one CCC action")
+      }
+      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
+        can_submit <- FALSE
+        validation_messages <- c(validation_messages, "Please select at least one competency area")
+      }
+    }
+    
+    tagList(
+      if (length(validation_messages) > 0) {
+        div(
+          class = "alert alert-warning mb-3",
+          tags$strong("Please complete the following:"),
+          tags$ul(
+            lapply(validation_messages, function(msg) tags$li(msg))
+          )
+        )
+      },
+      
+      actionButton(
+        "submit_interim_review",
+        "Submit Interim Review",
+        class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
+        icon = icon("save"),
+        disabled = !can_submit
+      )
+    )
+  })
+  
+  # Final submit button for scheduled reviews
+  output$final_submit_button <- renderUI({
+    can_submit <- TRUE
+    validation_messages <- character(0)
+    
+    # Check if we're in milestone section for scheduled review
+    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1" && 
+        !is.null(input$ccc_session) && input$ccc_session != "7") {
+      
+      milestones_available <- milestones_exist()
+      
+      if (milestones_available) {
+        # EXISTING MILESTONES: Require acceptance decision
+        if (is.null(input$ccc_mile) || input$ccc_mile == "") {
+          can_submit <- FALSE
+          validation_messages <- c(validation_messages, "Please indicate if milestones are acceptable")
+        }
+        
+        # If not acceptable, require edits and comments
+        if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
+          if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please edit the milestone assessments")
+          }
+          if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please comment on milestone changes")
+          }
+        }
+      } else {
+        # NO EXISTING MILESTONES: Require entry decision
+        if (is.null(input$ccc_enter_milestones) || input$ccc_enter_milestones == "") {
+          can_submit <- FALSE
+          validation_messages <- c(validation_messages, "Please decide whether to enter milestone assessments")
+        }
+        
+        # If choosing to enter, require assessments and comments
+        if (!is.null(input$ccc_enter_milestones) && input$ccc_enter_milestones == "1") {
+          if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please enter milestone assessments")
+          }
+          if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
+            can_submit <- FALSE
+            validation_messages <- c(validation_messages, "Please comment on milestone assessment")
+          }
+        }
+      }
+    }
+    
+    tagList(
+      if (length(validation_messages) > 0) {
+        div(
+          class = "alert alert-warning mb-3",
+          tags$strong("Please complete the following:"),
+          tags$ul(
+            lapply(validation_messages, function(msg) tags$li(msg))
+          )
+        )
+      },
+      
+      actionButton(
+        "submit_ccc_review",
+        "Submit CCC Review",
+        class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
+        icon = icon("save"),
+        disabled = !can_submit
+      )
+    )
+  })
   
   # ============================================================================
-  # CCC REVIEW FORM VALIDATION AND SUBMISSION - FIXED
+  # CCC REVIEW FORM SUBMISSION
   # ============================================================================
   
   # Handle initial submit button click - show confirmation modal
@@ -1586,6 +2005,37 @@ server <- function(input, output, session) {
         }
       }
       
+      # Handle milestone entry for new assessments
+      if (input$ccc_rev_type == "1" &&  # Scheduled review only
+          !is.null(input$ccc_enter_milestones) && input$ccc_enter_milestones == "1" &&  # User chose to enter milestones
+          !is.null(ccc_miles_mod$scores()) && length(ccc_miles_mod$scores()) > 0) {  # Assessments were made
+        
+        message("Processing new milestone entries...")
+        
+        # Submit new milestone assessments
+        milestone_result <- submit_milestone_data(
+          redcap_url = redcap_url,
+          redcap_token = token,
+          record_id = record_id,
+          selected_period = milestone_period,
+          resident_level = values$selected_resident$Level,
+          milestone_scores = ccc_miles_mod$scores(),
+          milestone_desc = list()
+        )
+        
+        if (milestone_result$success) {
+          milestone_edits_made <- TRUE
+          message("New milestone assessments saved successfully")
+        } else {
+          showNotification(
+            paste("Error saving milestone assessments:", milestone_result$outcome_message), 
+            type = "error", 
+            duration = 10
+          )
+          return()  # Stop if milestone save failed
+        }
+      }
+      
       # STEP 3: Build CCC review data
       ccc_data <- list(
         ccc_date = format(Sys.Date(), "%Y-%m-%d"),
@@ -1605,7 +2055,7 @@ server <- function(input, output, session) {
         }
       }
       
-      # FIXED: Handle checkbox fields properly for REDCap
+      # Handle checkbox fields properly for REDCap
       if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
         
         # CHECKBOX: Actions suggested by CCC (ccc_action___1, ccc_action___2, etc.)
@@ -1645,7 +2095,7 @@ server <- function(input, output, session) {
         }
       }
       
-      # Add scheduled review specific fields (these are ONLY for scheduled reviews)
+      # Add scheduled review specific fields
       if (input$ccc_rev_type == "1") {
         
         # ILP comments
@@ -1653,10 +2103,21 @@ server <- function(input, output, session) {
           ccc_data$ccc_ilp <- input$ccc_ilp
         }
         
+        # Concern notes (when concerns exist) - NEW FIELD
+        if (!is.null(input$ccc_concern) && input$ccc_concern == "1" &&
+            !is.null(input$ccc_concern_notes) && nzchar(trimws(input$ccc_concern_notes))) {
+          ccc_data$ccc_concern_notes <- input$ccc_concern_notes
+        }
+        
         # Follow-up actions (only if checkbox is checked)
         if (!is.null(input$has_action_items) && input$has_action_items &&
             !is.null(input$ccc_issues_follow_up) && nzchar(trimws(input$ccc_issues_follow_up))) {
           ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
+        }
+        
+        # Person responsible
+        if (!is.null(input$ccc_fu_resp) && nzchar(trimws(input$ccc_fu_resp))) {
+          ccc_data$ccc_fu_resp <- input$ccc_fu_resp
         }
         
         # Milestone completion status (NOT for Intern Intro session = 7)
@@ -1680,6 +2141,27 @@ server <- function(input, output, session) {
         # Additional comments
         if (!is.null(input$ccc_comments) && nzchar(trimws(input$ccc_comments))) {
           ccc_data$ccc_comments <- input$ccc_comments
+        }
+      }
+      
+      # Add interim review specific fields
+      if (input$ccc_rev_type == "2") {
+        
+        # Concern notes (when concerns exist) - NEW FIELD for interim too
+        if (!is.null(input$ccc_concern) && input$ccc_concern == "1" &&
+            !is.null(input$ccc_concern_notes) && nzchar(trimws(input$ccc_concern_notes))) {
+          ccc_data$ccc_concern_notes <- input$ccc_concern_notes
+        }
+        
+        # Person responsible
+        if (!is.null(input$ccc_fu_resp) && nzchar(trimws(input$ccc_fu_resp))) {
+          ccc_data$ccc_fu_resp <- input$ccc_fu_resp
+        }
+        
+        # Follow-up actions for interim reviews
+        if (!is.null(input$has_action_items) && input$has_action_items &&
+            !is.null(input$ccc_issues_follow_up) && nzchar(trimws(input$ccc_issues_follow_up))) {
+          ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
         }
       }
       
@@ -1781,14 +2263,17 @@ server <- function(input, output, session) {
             
             # Navigate back to dashboard
             shinyjs::hide("ccc-review-pages")
+            shinyjs::hide("milestone-review-section")
+            shinyjs::show("scheduled-step-2")
             shinyjs::delay(100, {
               shinyjs::show("ccc-dashboard-page")
             })
             
-            # Reset resident selection
+            # Reset resident selection and clear form
             values$selected_resident <- NULL
             values$current_period <- NULL
             values$redcap_period <- NULL
+            clear_ccc_form_inputs(session)
             
           } else {
             showNotification("Error: No records were updated in REDCap. Please try again.", 
@@ -1808,14 +2293,17 @@ server <- function(input, output, session) {
           
           # Navigate back to dashboard
           shinyjs::hide("ccc-review-pages")
+          shinyjs::hide("milestone-review-section")
+          shinyjs::show("scheduled-step-2")
           shinyjs::delay(100, {
             shinyjs::show("ccc-dashboard-page")
           })
           
-          # Reset resident selection
+          # Reset resident selection and clear form
           values$selected_resident <- NULL
           values$current_period <- NULL
           values$redcap_period <- NULL
+          clear_ccc_form_inputs(session)
         })
         
       } else {
@@ -1830,14 +2318,17 @@ server <- function(input, output, session) {
           
           # Navigate back to dashboard
           shinyjs::hide("ccc-review-pages")
+          shinyjs::hide("milestone-review-section")
+          shinyjs::show("scheduled-step-2")
           shinyjs::delay(100, {
             shinyjs::show("ccc-dashboard-page")
           })
           
-          # Reset resident selection
+          # Reset resident selection and clear form
           values$selected_resident <- NULL
           values$current_period <- NULL
           values$redcap_period <- NULL
+          clear_ccc_form_inputs(session)
           
         } else {
           showNotification(paste("REDCap error (", status_code, "):", content_text), 
@@ -1847,96 +2338,154 @@ server <- function(input, output, session) {
     })
   })
   
-  
-  # Update the submit button validation logic
-  output$ccc_submit_button <- renderUI({
-    # Check if form is valid for submission
-    can_submit <- TRUE
-    validation_messages <- character(0)
+  # Handle interim review submission
+  observeEvent(input$submit_interim_review, {
+    req(values$selected_resident)
     
-    # Check if review type is selected
-    if (is.null(input$ccc_rev_type) || input$ccc_rev_type == "") {
-      can_submit <- FALSE
-      validation_messages <- c(validation_messages, "Please select a review type")
-    }
-    
-    # SCHEDULED REVIEW VALIDATION
-    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "1") {
-      # For scheduled reviews, check session selection
-      if (is.null(input$ccc_session) || input$ccc_session == "") {
-        can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please select a review session")
+    # Show processing notification
+    withProgress(message = "Submitting interim review...", {
+      
+      # Get REDCap connection info
+      redcap_url <- app_data()$url %||% "https://redcapsurvey.slu.edu/api/"
+      token <- app_data()$rdm_token
+      
+      # Get record ID for the selected resident
+      record_id <- find_record_id(app_data(), values$selected_resident$name)
+      
+      # Validate we have essential data
+      if (is.null(record_id)) {
+        showNotification("Error: Could not find record ID for resident", type = "error")
+        return()
       }
       
-      # Check milestones for scheduled reviews (EXCEPT Intern Intro)
-      if (!is.null(input$ccc_session) && input$ccc_session != "7") {
-        if (is.null(input$ccc_mile) || input$ccc_mile == "") {
-          can_submit <- FALSE
-          validation_messages <- c(validation_messages, "Please indicate if milestones are acceptable")
+      # Get next available instance for interim review
+      ccc_session_value <- get_redcap_instance(
+        level = values$selected_resident$Level,
+        period = "Interim",
+        review_type = "interim",
+        redcap_url = redcap_url,
+        redcap_token = token,
+        record_id = record_id
+      )
+      
+      # Build CCC review data for interim review
+      ccc_data <- list(
+        ccc_date = format(Sys.Date(), "%Y-%m-%d"),
+        ccc_rev_type = "2",  # Interim review
+        ccc_interim = input$ccc_interim,
+        ccc_concern = input$ccc_concern %||% "0"
+      )
+      
+      # Handle checkbox fields for concerns
+      if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
+        
+        # Actions
+        if (!is.null(input$ccc_action) && length(input$ccc_action) > 0) {
+          for (action_value in input$ccc_action) {
+            field_name <- paste0("ccc_action___", action_value)
+            ccc_data[[field_name]] <- "1"
+          }
         }
         
-        # If milestones not acceptable, require edits and comments
-        if (!is.null(input$ccc_mile) && input$ccc_mile == "0") {
-          if (is.null(ccc_miles_mod$scores()) || length(ccc_miles_mod$scores()) == 0) {
-            can_submit <- FALSE
-            validation_messages <- c(validation_messages, "Please edit the milestone assessments")
+        # Action Status
+        if (!is.null(input$ccc_action_status) && length(input$ccc_action_status) > 0) {
+          for (status_value in input$ccc_action_status) {
+            field_name <- paste0("ccc_action_status___", status_value)
+            ccc_data[[field_name]] <- "1"
           }
-          if (is.null(input$ccc_mile_concerns) || trimws(input$ccc_mile_concerns) == "") {
-            can_submit <- FALSE
-            validation_messages <- c(validation_messages, "Please comment on milestone changes")
+        }
+        
+        # Competency areas
+        if (!is.null(input$ccc_competency) && length(input$ccc_competency) > 0) {
+          for (competency_value in input$ccc_competency) {
+            field_name <- paste0("ccc_competency___", competency_value)
+            ccc_data[[field_name]] <- "1"
           }
         }
       }
-      # For Intern Intro (session = "7"), no milestone validation needed
-    }
-    
-    # INTERIM REVIEW VALIDATION
-    if (!is.null(input$ccc_rev_type) && input$ccc_rev_type == "2") {
-      # For interim reviews, require interim notes
-      if (is.null(input$ccc_interim) || trimws(input$ccc_interim) == "") {
-        can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please provide interim review notes")
-      }
-    }
-    
-    # COMMON VALIDATION (for all review types)
-    # Check if concerns are addressed
-    if (is.null(input$ccc_concern) || input$ccc_concern == "") {
-      can_submit <- FALSE
-      validation_messages <- c(validation_messages, "Please indicate if there are concerns")
-    }
-    
-    # If concerns = Yes, require action selection
-    if (!is.null(input$ccc_concern) && input$ccc_concern == "1") {
-      if (is.null(input$ccc_action) || length(input$ccc_action) == 0) {
-        can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please select at least one CCC action")
-      }
-      if (is.null(input$ccc_competency) || length(input$ccc_competency) == 0) {
-        can_submit <- FALSE
-        validation_messages <- c(validation_messages, "Please select at least one competency area")
-      }
-    }
-    
-    tagList(
-      if (length(validation_messages) > 0) {
-        div(
-          class = "alert alert-warning mb-3",
-          tags$strong("Please complete the following:"),
-          tags$ul(
-            lapply(validation_messages, function(msg) tags$li(msg))
-          )
-        )
-      },
       
-      actionButton(
-        "submit_ccc_review",
-        "Submit CCC Review",
-        class = if (can_submit) "btn-success btn-lg" else "btn-secondary btn-lg",
-        icon = icon("save"),
-        disabled = !can_submit
+      # Person responsible
+      if (!is.null(input$ccc_fu_resp) && nzchar(trimws(input$ccc_fu_resp))) {
+        ccc_data$ccc_fu_resp <- input$ccc_fu_resp
+      }
+      
+      # Follow-up actions
+      if (!is.null(input$has_action_items) && input$has_action_items &&
+          !is.null(input$ccc_issues_follow_up) && nzchar(trimws(input$ccc_issues_follow_up))) {
+        ccc_data$ccc_issues_follow_up <- input$ccc_issues_follow_up
+      }
+      
+      # Set completion status
+      ccc_data$ccc_review_complete <- "2"  # 2 = Complete
+      
+      # Build JSON for REDCap submission
+      json_data <- paste0(
+        '[{"record_id":"', escape_json_string(as.character(record_id)), '"',
+        ',"redcap_repeat_instrument":"ccc_review"',
+        ',"redcap_repeat_instance":"', escape_json_string(as.character(ccc_session_value)), '"'
       )
-    )
+      
+      # Add all CCC fields to JSON
+      for (field in names(ccc_data)) {
+        if (!is.null(ccc_data[[field]]) && !is.na(ccc_data[[field]])) {
+          value <- escape_json_string(as.character(ccc_data[[field]]))
+          json_data <- paste0(json_data, ',"', field, '":"', value, '"')
+        }
+      }
+      
+      json_data <- paste0(json_data, "}]")
+      
+      # Submit to REDCap
+      response <- tryCatch({
+        httr::POST(
+          url = redcap_url,
+          body = list(
+            token = token,
+            content = "record",
+            format = "json",
+            type = "flat",
+            overwriteBehavior = "normal",
+            forceAutoNumber = "false",
+            data = json_data,
+            returnContent = "count",
+            returnFormat = "json"
+          ),
+          encode = "form",
+          httr::timeout(30)
+        )
+      }, error = function(e) {
+        return(list(status_code = 0, error = e$message))
+      })
+      
+      # Process response
+      if ("error" %in% names(response)) {
+        showNotification(paste("HTTP error:", response$error), type = "error", duration = 10)
+        return()
+      }
+      
+      status_code <- httr::status_code(response)
+      content_text <- httr::content(response, "text", encoding = "UTF-8")
+      
+      if (status_code == 200) {
+        showNotification("Interim review submitted successfully!", type = "message", duration = 5)
+        
+        # Navigate back to dashboard
+        shinyjs::hide("ccc-review-pages")
+        shinyjs::delay(100, {
+          shinyjs::show("ccc-dashboard-page")
+        })
+        
+        # Reset resident selection and clear form
+        values$selected_resident <- NULL
+        values$current_period <- NULL
+        values$redcap_period <- NULL
+        clear_ccc_form_inputs(session)
+        
+      } else {
+        showNotification(paste("REDCap error (", status_code, "):", content_text), 
+                         type = "error", duration = 10)
+      }
+    })
   })
   
 } # End of server function

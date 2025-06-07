@@ -299,3 +299,160 @@ div[data-card-type="resident-table"] {
 .milestone-checkbox {
   margin-right: 10px;
 }
+
+/* Enhanced card styling for better visual hierarchy */
+.card {
+  border: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.card-header {
+  border-bottom: 2px solid rgba(255,255,255,0.1);
+  padding: 20px;
+}
+
+.card-body {
+  padding: 25px;
+}
+
+/* Enhanced section styling */
+.ilp-summary-section,
+.secondary-review-section,
+.ccc-comments-section,
+.concerns-section,
+.additional-comments-section,
+.responsibility-section {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.ilp-summary-section:hover,
+.secondary-review-section:hover,
+.ccc-comments-section:hover,
+.concerns-section:hover,
+.additional-comments-section:hover,
+.responsibility-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+/* Enhanced form elements */
+.form-control {
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+  transition: all 0.3s ease;
+}
+
+.form-control:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Enhanced radio and checkbox styling */
+.form-check-input {
+  width: 1.2em;
+  height: 1.2em;
+  margin-top: 0.125em;
+}
+
+.form-check-label {
+  margin-left: 0.5em;
+  font-weight: 500;
+}
+
+/* Enhanced action sections */
+.action-section,
+.competency-section {
+  transition: all 0.3s ease;
+}
+
+.action-section:hover,
+.competency-section:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* Enhanced alert styling */
+.alert {
+  border-radius: 10px;
+  border-width: 0;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+/* Purple color for secondary review */
+.text-purple {
+  color: #9c27b0 !important;
+}
+
+/* Enhanced button styling */
+.btn-lg {
+  padding: 12px 30px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Enhanced spacing */
+.mb-4 {
+  margin-bottom: 2rem !important;
+}
+
+.p-4 {
+  padding: 1.5rem !important;
+}
+
+/* Enhanced Action Items section */
+.action-items-section {
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255,255,255,0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.action-items-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.action-items-section:hover::before {
+  left: 100%;
+}
+
+.action-items-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+}
+
+/* Enhanced icon styling for action items */
+.fa-xl {
+  font-size: 1.75em !important;
+  vertical-align: middle;
+}
+
+/* Enhanced checkbox styling for action items */
+.action-items-section .form-check-input {
+  width: 1.4em !important;
+  height: 1.4em !important;
+  margin-top: 0.125em !important;
+  border: 2px solid #2196f3 !important;
+}
+
+.action-items-section .form-check-input:checked {
+  background-color: #2196f3 !important;
+  border-color: #2196f3 !important;
+}
+
+.action-items-section .form-check-label {
+  font-weight: 600 !important;
+  color: #1976d2 !important;
+  font-size: 1.1em !important;
+}
