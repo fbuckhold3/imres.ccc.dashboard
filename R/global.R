@@ -136,6 +136,9 @@ stored_access_code <- get_access_code()
 
 
 # ---------- LOAD IMRES DATA ----------
+# Corrected version of your load_imres_data function
+# Replace your existing function with this version
+
 load_imres_data <- function(config) {
   message("=== STARTING load_imres_data FUNCTION ===")
   
@@ -161,15 +164,19 @@ load_imres_data <- function(config) {
     NULL
   })
   
-  # --- Pull all forms data ---
+  # --- Pull all forms data INCLUDING milestone forms ---
   message("About to call forms_api_pull with these arguments:")
   message("- rdm_token length: ", nchar(config$rdm_token))
   message("- url: ", config$url)
-  message("- forms: resident_data, faculty_evaluation, ilp, s_eval, scholarship")
+  message("- forms: resident_data, faculty_evaluation, ilp, s_eval, scholarship, milestone forms")
   
   rdm_dat <- tryCatch({
     message("Pulling forms data...")
-    result <- forms_api_pull(config$rdm_token, config$url, 'resident_data', 'faculty_evaluation', 'ilp', 's_eval', 'scholarship', 'ccc_review', 'coach_rev', 'second_review')
+    # FIXED: Added milestone forms to the pull
+    result <- forms_api_pull(config$rdm_token, config$url, 
+                             'resident_data', 'faculty_evaluation', 'ilp', 's_eval', 'scholarship', 
+                             'ccc_review', 'coach_rev', 'second_review',
+                             'milestone_entry', 'milestone_selfevaluation_c33c')
     
     message("Forms data pulled. Structure of rdm_dat:")
     message("rdm_dat is of class: ", paste(class(result), collapse=", "))
@@ -255,150 +262,45 @@ load_imres_data <- function(config) {
   })
   
   # --- Extract s_eval data ---
-  # Additional debugging for career data rendering
-  # Add this to your server.R file in the renderUI function for career_data_ui
-  
-  # Enhanced s_eval data extraction function with tryCatch
-  # Add this to your global.R or helpers.R file
-  
-  get_s_eval_data <- function(rdm_data) {
-    tryCatch({
-      message("Starting enhanced s_eval data extraction")
-      
-      if (is.null(rdm_data)) {
-        message("rdm_data is NULL, cannot extract s_eval data")
-        return(NULL)
-      }
-      
+  s_eval_data <- tryCatch({
+    message("Starting s_eval data extraction")
+    
+    if (is.null(rdm_dat)) {
+      message("rdm_dat is NULL, cannot extract s_eval data")
+      NULL
+    } else {
       # Try multiple approaches to extract s_eval data
       
       # Approach 1: Check if s_eval is a direct component
-      if ("s_eval" %in% names(rdm_data)) {
-        message("Found s_eval data as a direct component in rdm_data")
-        return(rdm_data$s_eval)
-      }
-      
-      # Approach 2: Check if it's a capitalized key
-      if ("S_eval" %in% names(rdm_data)) {
-        message("Found S_eval data (capitalized) in rdm_data")
-        return(rdm_data$S_eval)
-      }
-      
-      # Approach 3: If rdm_data is a data frame with repeating instruments
-      if (is.data.frame(rdm_data) && "redcap_repeat_instrument" %in% names(rdm_data)) {
+      if ("s_eval" %in% names(rdm_dat)) {
+        message("Found s_eval data as a direct component in rdm_dat")
+        rdm_dat$s_eval
+      } else if ("S_eval" %in% names(rdm_dat)) {
+        message("Found S_eval data (capitalized) in rdm_dat")
+        rdm_dat$S_eval
+      } else if (is.data.frame(rdm_dat) && "redcap_repeat_instrument" %in% names(rdm_dat)) {
         message("Looking for s_eval data in repeating instruments")
         
-        # Print all unique values in redcap_repeat_instrument for debugging
-        message("Unique redcap_repeat_instrument values: ", 
-                paste(unique(rdm_data$redcap_repeat_instrument), collapse=", "))
-        
         # Try case-insensitive match
-        s_eval_rows <- rdm_data %>%
+        s_eval_rows <- rdm_dat %>%
           filter(tolower(redcap_repeat_instrument) %in% c("s_eval", "self evaluation", "self_evaluation"))
         
         if (nrow(s_eval_rows) > 0) {
           message("Extracted ", nrow(s_eval_rows), " rows of s_eval data from main dataframe")
-          return(s_eval_rows)
+          s_eval_rows
+        } else {
+          message("No rows found with matching redcap_repeat_instrument values")
+          NULL
         }
-        
-        message("No rows found with matching redcap_repeat_instrument values")
+      } else {
+        message("No s_eval data found using any extraction method")
+        NULL
       }
-      
-      # Approach 4: Look for s_eval in field names
-      message("Searching for s_eval fields in rdm_data...")
-      if (is.data.frame(rdm_data)) {
-        s_eval_cols <- names(rdm_data)[grepl("s_e_", names(rdm_data), fixed = TRUE)]
-        
-        if (length(s_eval_cols) > 0) {
-          message("Found ", length(s_eval_cols), " columns with 's_e_' prefix")
-          message("Sample column names: ", paste(head(s_eval_cols, 5), collapse=", "))
-          
-          # If we found columns, return the dataframe with at least name column and all s_eval columns
-          select_cols <- c("name", s_eval_cols)
-          select_cols <- select_cols[select_cols %in% names(rdm_data)]
-          
-          if ("name" %in% select_cols) {
-            s_eval_data <- rdm_data[, select_cols]
-            message("Created s_eval dataframe with ", nrow(s_eval_data), " rows and ", ncol(s_eval_data), " columns")
-            return(s_eval_data)
-          } else {
-            message("WARNING: Found s_eval columns but no 'name' column")
-          }
-        }
-      }
-      
-      # Approach 5: Look for objects with career paths/fellowship fields
-      message("Searching for career fields in rdm_data components...")
-      
-      if (is.list(rdm_data) && !is.data.frame(rdm_data)) {
-        for (component_name in names(rdm_data)) {
-          component <- rdm_data[[component_name]]
-          
-          if (is.data.frame(component)) {
-            career_cols <- names(component)[grepl("career|fellow|track", names(component), ignore.case = TRUE)]
-            
-            if (length(career_cols) > 0) {
-              message("Found career fields in component '", component_name, "': ", 
-                      paste(head(career_cols, 5), collapse=", "))
-              return(component)
-            }
-          }
-        }
-      }
-      
-      message("No s_eval data found using any extraction method")
-      return(NULL)
-    }, 
-    error = function(e) {
-      message("ERROR in get_s_eval_data: ", e$message)
-      # Print stack trace for debugging
-      message("Stack trace:")
-      print(sys.calls())
-      # Return NULL on error
-      return(NULL)
-    },
-    warning = function(w) {
-      message("WARNING in get_s_eval_data: ", w$message)
-      # Continue execution
-      NULL
-    },
-    finally = {
-      message("Completed s_eval data extraction attempt")
-    })
-  }
-  
-  # Updated ensure_data_loaded function with tryCatch for s_eval enhancement
-  ensure_data_loaded <- function() {
-    if (is.null(app_data_store)) {
-      # Only initialize data when needed
-      message("Starting data load process...")
-      config <- initialize_app_config()
-      message("Config initialized")
-      app_data_store <<- load_imres_data(config)
-      message("Data loaded")
-      
-      # Add enhanced s_eval extraction if it's not present
-      if (is.null(app_data_store$s_eval)) {
-        message("s_eval data is NULL, trying enhanced extraction...")
-        
-        # Use tryCatch for the enhancement attempt
-        tryCatch({
-          app_data_store$s_eval <<- get_s_eval_data(app_data_store)
-          message("Enhanced s_eval extraction complete. s_eval is now ", 
-                  ifelse(is.null(app_data_store$s_eval), "still NULL", "available"))
-        },
-        error = function(e) {
-          message("ERROR during enhanced s_eval extraction: ", e$message)
-          # Don't modify app_data_store on error
-        })
-      }
-      
-      # Add final check after data is loaded
-      message("FINAL CHECK: app_data_store contains these keys:", paste(names(app_data_store), collapse=", "))
-      message("FINAL CHECK: s_eval data is NULL?", is.null(app_data_store$s_eval))
     }
-    return(app_data_store)
-  }
+  }, error = function(e) {
+    message("Error extracting s_eval data: ", e$message)
+    NULL
+  })
   
   # --- Extract scholarship data ---
   schol_data <- tryCatch({
@@ -522,116 +424,278 @@ load_imres_data <- function(config) {
     })
   }
   
-  # get milestone descriptions
+  # ============================================================================
+  # ENHANCE MILESTONE DATA WITH DESCRIPTIONS
+  # ============================================================================
   
-  milestone_descriptions <- tryCatch({
-    message("Getting raw milestone data with descriptions...")
+  enhanced_s_miles <- NULL
+  enhanced_p_miles <- NULL
+  
+  tryCatch({
+    message("=== ENHANCING MILESTONE DATA WITH DESCRIPTIONS ===")
     
-    # Pull milestone_entry form (program milestones)
-    program_milestone_raw <- tryCatch({
-      message("Pulling milestone_entry form...")
-      result <- forms_api_pull(config$rdm_token, config$url, 'milestone_entry')
-      message("Successfully pulled milestone_entry form")
-      
-      # If it's a list, extract the milestone_entry component
-      if (is.list(result) && "milestone_entry" %in% names(result)) {
-        result$milestone_entry
-      } else if (is.data.frame(result)) {
-        result
-      } else {
-        message("Unexpected format for milestone_entry data")
-        NULL
+    # Get raw self milestone data
+    raw_self_milestones <- NULL
+    if (!is.null(rdm_dat) && "milestone_selfevaluation_c33c" %in% names(rdm_dat)) {
+      raw_self_milestones <- rdm_dat$milestone_selfevaluation_c33c
+      message("Found raw self milestone data: ", nrow(raw_self_milestones), " rows")
+    } else {
+      # Pull fresh if not in rdm_dat
+      message("Pulling fresh self milestone data...")
+      raw_data <- forms_api_pull(config$rdm_token, config$url, 'milestone_selfevaluation_c33c')
+      if (is.list(raw_data) && "milestone_selfevaluation_c33c" %in% names(raw_data)) {
+        raw_self_milestones <- raw_data$milestone_selfevaluation_c33c
+      } else if (is.data.frame(raw_data)) {
+        raw_self_milestones <- raw_data
       }
-    }, error = function(e) {
-      message("Error pulling milestone_entry form: ", e$message)
-      NULL
-    })
+      message("Pulled self milestone data: ", nrow(raw_self_milestones), " rows")
+    }
     
-    # Pull milestone_selfevaluation_c33c form (self milestones)
-    self_milestone_raw <- tryCatch({
-      message("Pulling milestone_selfevaluation_c33c form...")
-      result <- forms_api_pull(config$rdm_token, config$url, 'milestone_selfevaluation_c33c')
-      message("Successfully pulled milestone_selfevaluation_c33c form")
-      
-      # If it's a list, extract the component
-      if (is.list(result) && "milestone_selfevaluation_c33c" %in% names(result)) {
-        result$milestone_selfevaluation_c33c
-      } else if (is.data.frame(result)) {
-        result
-      } else {
-        message("Unexpected format for milestone_selfevaluation_c33c data")
-        NULL
+    # Get raw program milestone data
+    raw_program_milestones <- NULL
+    if (!is.null(rdm_dat) && "milestone_entry" %in% names(rdm_dat)) {
+      raw_program_milestones <- rdm_dat$milestone_entry
+      message("Found raw program milestone data: ", nrow(raw_program_milestones), " rows")
+    } else {
+      # Pull fresh if not in rdm_dat
+      message("Pulling fresh program milestone data...")
+      raw_data <- forms_api_pull(config$rdm_token, config$url, 'milestone_entry')
+      if (is.list(raw_data) && "milestone_entry" %in% names(raw_data)) {
+        raw_program_milestones <- raw_data$milestone_entry
+      } else if (is.data.frame(raw_data)) {
+        raw_program_milestones <- raw_data
       }
-    }, error = function(e) {
-      message("Error pulling milestone_selfevaluation_c33c form: ", e$message)
-      NULL
-    })
+      message("Pulled program milestone data: ", nrow(raw_program_milestones), " rows")
+    }
     
-    # Return both raw milestone datasets
-    list(
-      program_raw = program_milestone_raw,
-      self_raw = self_milestone_raw
-    )
+    # Create record_id to name mapping from resident_data
+    record_name_map <- NULL
+    if (!is.null(resident_data) && "record_id" %in% names(resident_data) && "name" %in% names(resident_data)) {
+      record_name_map <- resident_data %>%
+        select(record_id, name) %>%
+        distinct()
+      message("Created record_id to name mapping: ", nrow(record_name_map), " entries")
+    }
+    
+    # FIXED: Create separate milestone descriptions dataframes instead of modifying the original
+    s_miles_descriptions <- NULL
+    p_miles_descriptions <- NULL
+    
+    # Create self milestone descriptions table
+    if (!is.null(raw_self_milestones) && !is.null(s_miles) && !is.null(record_name_map)) {
+      message("Creating self milestone descriptions table...")
+      
+      # Create a copy of s_miles for descriptions
+      s_miles_descriptions <- s_miles
+      
+      # Add description fields
+      desc_fields <- names(raw_self_milestones)[grepl("_desc", names(raw_self_milestones))]
+      message("Found ", length(desc_fields), " description fields in raw self data: ", paste(head(desc_fields, 5), collapse = ", "))
+      
+      # Initialize description columns
+      for (desc_field in desc_fields) {
+        s_miles_descriptions[[desc_field]] <- NA_character_
+      }
+      
+      # Match rows based on period and milestone scores
+      for (i in 1:nrow(s_miles_descriptions)) {
+        proc_row <- s_miles_descriptions[i, ]
+        proc_period <- proc_row$period
+        proc_name <- proc_row$name
+        
+        # Find matching raw rows by period
+        if ("prog_mile_period_self" %in% names(raw_self_milestones)) {
+          raw_period_rows <- raw_self_milestones[
+            !is.na(raw_self_milestones$prog_mile_period_self) & 
+              raw_self_milestones$prog_mile_period_self == proc_period, ]
+          
+          if (nrow(raw_period_rows) > 0) {
+            # Try to match by milestone scores
+            best_match_idx <- NULL
+            best_match_score <- 0
+            
+            for (j in 1:nrow(raw_period_rows)) {
+              raw_row <- raw_period_rows[j, ]
+              match_count <- 0
+              
+              # Compare milestone scores
+              milestone_pairs <- list(
+                c("PC1", "rep_pc1_self"),
+                c("PC2", "rep_pc2_self"),
+                c("PC3", "rep_pc3_self"),
+                c("PC6", "rep_pc6_self"),
+                c("SBP1", "rep_sbp1_self"),
+                c("SBP2", "rep_sbp2_self"),
+                c("SBP3", "rep_sbp3_self"),
+                c("PBL1", "rep_pbl1_self"),
+                c("PBL2", "rep_pbl2_self"),
+                c("PROF1", "rep_prof1_self"),
+                c("PROF2", "rep_prof2_self"),
+                c("PROF3", "rep_prof3_self"),
+                c("PROF4", "rep_prof4_self"),
+                c("ICS1", "rep_ics1_self"),
+                c("ICS2", "rep_ics2_self"),
+                c("ICS3", "rep_ics3_self")
+              )
+              
+              for (pair in milestone_pairs) {
+                proc_field <- pair[1]
+                raw_field <- pair[2]
+                
+                if (proc_field %in% names(proc_row) && raw_field %in% names(raw_row)) {
+                  proc_val <- proc_row[[proc_field]]
+                  raw_val <- raw_row[[raw_field]]
+                  
+                  if (!is.na(proc_val) && !is.na(raw_val) && proc_val == raw_val) {
+                    match_count <- match_count + 1
+                  }
+                }
+              }
+              
+              if (match_count > best_match_score) {
+                best_match_score <- match_count
+                best_match_idx <- j
+              }
+            }
+            
+            # If we found a good match, copy the description fields
+            if (!is.null(best_match_idx) && best_match_score > 3) {
+              best_raw_row <- raw_period_rows[best_match_idx, ]
+              
+              for (desc_field in desc_fields) {
+                if (desc_field %in% names(best_raw_row)) {
+                  s_miles_descriptions[i, desc_field] <- best_raw_row[[desc_field]]
+                }
+              }
+              
+              message("Matched self milestone row for ", proc_name, " period ", proc_period, " with ", best_match_score, " matching scores")
+            }
+          }
+        }
+      }
+      
+      message("Self milestone descriptions table created")
+    }
+    
+    # Create program milestone descriptions table
+    if (!is.null(raw_program_milestones) && !is.null(p_miles) && !is.null(record_name_map)) {
+      message("Creating program milestone descriptions table...")
+      
+      # Create a copy of p_miles for descriptions
+      p_miles_descriptions <- p_miles
+      
+      # Add description fields
+      desc_fields <- names(raw_program_milestones)[grepl("_desc", names(raw_program_milestones))]
+      message("Found ", length(desc_fields), " description fields in raw program data: ", paste(head(desc_fields, 5), collapse = ", "))
+      
+      # Initialize description columns
+      for (desc_field in desc_fields) {
+        p_miles_descriptions[[desc_field]] <- NA_character_
+      }
+      
+      # Match rows based on period and scores
+      for (i in 1:nrow(p_miles_descriptions)) {
+        proc_row <- p_miles_descriptions[i, ]
+        proc_period <- proc_row$period
+        proc_name <- proc_row$name
+        
+        # Find matching raw rows by period
+        if ("prog_mile_period" %in% names(raw_program_milestones)) {
+          raw_period_rows <- raw_program_milestones[
+            !is.na(raw_program_milestones$prog_mile_period) & 
+              raw_program_milestones$prog_mile_period == proc_period, ]
+          
+          if (nrow(raw_period_rows) > 0) {
+            # Match by milestone scores
+            best_match_idx <- NULL
+            best_match_score <- 0
+            
+            for (j in 1:nrow(raw_period_rows)) {
+              raw_row <- raw_period_rows[j, ]
+              match_count <- 0
+              
+              # Compare milestone scores
+              milestone_pairs <- list(
+                c("PC1", "rep_pc1"),
+                c("PC2", "rep_pc2"),
+                c("PC3", "rep_pc3"),
+                c("PC4", "rep_pc4"),
+                c("PC5", "rep_pc5"),
+                c("PC6", "rep_pc6"),
+                c("MK1", "rep_mk1"),
+                c("MK2", "rep_mk2"),
+                c("MK3", "rep_mk3"),
+                c("SBP1", "rep_sbp1"),
+                c("SBP2", "rep_sbp2"),
+                c("SBP3", "rep_sbp3"),
+                c("PBL1", "rep_pbl1"),
+                c("PBL2", "rep_pbl2"),
+                c("PROF1", "rep_prof1"),
+                c("PROF2", "rep_prof2"),
+                c("PROF3", "rep_prof3"),
+                c("PROF4", "rep_prof4"),
+                c("ICS1", "rep_ics1"),
+                c("ICS2", "rep_ics2"),
+                c("ICS3", "rep_ics3")
+              )
+              
+              for (pair in milestone_pairs) {
+                proc_field <- pair[1]
+                raw_field <- pair[2]
+                
+                if (proc_field %in% names(proc_row) && raw_field %in% names(raw_row)) {
+                  proc_val <- proc_row[[proc_field]]
+                  raw_val <- raw_row[[raw_field]]
+                  
+                  if (!is.na(proc_val) && !is.na(raw_val) && proc_val == raw_val) {
+                    match_count <- match_count + 1
+                  }
+                }
+              }
+              
+              if (match_count > best_match_score) {
+                best_match_score <- match_count
+                best_match_idx <- j
+              }
+            }
+            
+            # Copy description fields from best match
+            if (!is.null(best_match_idx) && best_match_score > 5) {
+              best_raw_row <- raw_period_rows[best_match_idx, ]
+              
+              for (desc_field in desc_fields) {
+                if (desc_field %in% names(best_raw_row)) {
+                  p_miles_descriptions[i, desc_field] <- best_raw_row[[desc_field]]
+                }
+              }
+              
+              message("Matched program milestone row for ", proc_name, " period ", proc_period, " with ", best_match_score, " matching scores")
+            }
+          }
+        }
+      }
+      
+      message("Program milestone descriptions table created")
+    }
     
   }, error = function(e) {
-    message("Error getting milestone descriptions: ", e$message)
-    list(program_raw = NULL, self_raw = NULL)
+    message("Error enhancing milestone data: ", e$message)
+    # Use original data if enhancement fails
+    s_miles_descriptions <- s_miles
+    p_miles_descriptions <- p_miles
   })
   
+  # FIXED: Keep original milestone data for plots, add descriptions as separate objects
+  message("Keeping original milestone data for plots, adding descriptions separately")
+  message("s_miles columns (for plots): ", paste(names(s_miles), collapse = ", "))
+  message("p_miles columns (for plots): ", paste(names(p_miles), collapse = ", "))
   
-  # --- Debug milestone forms structure ---
-  if (!is.null(milestone_descriptions$program_raw)) {
-    message("=== DEBUG: Program milestone raw data structure ===")
-    message("Program milestone data class: ", paste(class(milestone_descriptions$program_raw), collapse=", "))
-    if (is.data.frame(milestone_descriptions$program_raw)) {
-      message("Program milestone rows: ", nrow(milestone_descriptions$program_raw))
-      message("Program milestone columns: ", ncol(milestone_descriptions$program_raw))
-      
-      # Look for description columns
-      desc_cols <- names(milestone_descriptions$program_raw)[grepl("_desc$", names(milestone_descriptions$program_raw))]
-      if (length(desc_cols) > 0) {
-        message("Found ", length(desc_cols), " description columns in program data:")
-        message("Sample desc columns: ", paste(head(desc_cols, 5), collapse=", "))
-      } else {
-        message("No _desc columns found in program milestone data")
-      }
-      
-      # Look for period columns
-      period_cols <- names(milestone_descriptions$program_raw)[grepl("period", names(milestone_descriptions$program_raw), ignore.case = TRUE)]
-      if (length(period_cols) > 0) {
-        message("Found period columns in program data: ", paste(period_cols, collapse=", "))
-      }
-    }
-  } else {
-    message("Program milestone raw data is NULL")
+  if (!is.null(s_miles_descriptions)) {
+    message("s_miles_descriptions available with ", ncol(s_miles_descriptions), " columns")
   }
-  
-  if (!is.null(milestone_descriptions$self_raw)) {
-    message("=== DEBUG: Self milestone raw data structure ===")
-    message("Self milestone data class: ", paste(class(milestone_descriptions$self_raw), collapse=", "))
-    if (is.data.frame(milestone_descriptions$self_raw)) {
-      message("Self milestone rows: ", nrow(milestone_descriptions$self_raw))
-      message("Self milestone columns: ", ncol(milestone_descriptions$self_raw))
-      
-      # Look for description columns
-      desc_cols <- names(milestone_descriptions$self_raw)[grepl("_desc$", names(milestone_descriptions$self_raw))]
-      if (length(desc_cols) > 0) {
-        message("Found ", length(desc_cols), " description columns in self data:")
-        message("Sample desc columns: ", paste(head(desc_cols, 5), collapse=", "))
-      } else {
-        message("No _desc columns found in self milestone data")
-      }
-      
-      # Look for period columns
-      period_cols <- names(milestone_descriptions$self_raw)[grepl("period", names(milestone_descriptions$self_raw), ignore.case = TRUE)]
-      if (length(period_cols) > 0) {
-        message("Found period columns in self data: ", paste(period_cols, collapse=", "))
-      }
-    }
-  } else {
-    message("Self milestone raw data is NULL")
+  if (!is.null(p_miles_descriptions)) {
+    message("p_miles_descriptions available with ", ncol(p_miles_descriptions), " columns")
   }
-  
   
   # --- Extract CCC review data ---
   ccc_review_data <- tryCatch({
@@ -703,10 +767,11 @@ load_imres_data <- function(config) {
     ilp = ilp_data,
     s_eval = s_eval_data,
     schol_data = schol_data,
-    p_miles = p_miles,
-    s_miles = s_miles,
+    p_miles = p_miles,                          # CLEAN milestone data for plots (no _desc fields)
+    s_miles = s_miles,                          # CLEAN milestone data for plots (no _desc fields)
+    p_miles_descriptions = p_miles_descriptions, # Milestone data WITH descriptions for tables
+    s_miles_descriptions = s_miles_descriptions, # Milestone data WITH descriptions for tables
     ccc_review = ccc_review_data,
-    milestone_descriptions = milestone_descriptions,  # ADD THIS LINE
     url = config$url,
     eval_token = config$eval_token,
     rdm_token = config$rdm_token,

@@ -1948,179 +1948,133 @@ check_milestones_exist <- function(milestone_data, resident_name, period) {
 
 #' Create milestone description table from raw data
 #' 
+# Much simpler milestone description function that works with enhanced data
+# Replace your existing create_milestone_description_table function with this
+
 create_milestone_description_table <- function(resident_name, period, source_type, app_data) {
   
   message("Creating ", source_type, " milestone description table for ", resident_name, " in period ", period)
   
-  # STEP 1: Get the record_id for this resident name
-  record_id <- find_record_id(app_data, resident_name)
-  message("Found record_id for ", resident_name, ": ", record_id)
-  
-  if (is.null(record_id)) {
-    message("Could not find record_id for resident: ", resident_name)
-    return(create_empty_milestone_table(source_type))
-  }
-  
-  # STEP 2: Get raw milestone data
-  raw_milestone_data <- NULL
-  
-  if (source_type == "self") {
-    # Try to get raw self milestone data
-    if (!is.null(app_data$rdm_dat) && is.list(app_data$rdm_dat)) {
-      if ("milestone_selfevaluation_c33c" %in% names(app_data$rdm_dat)) {
-        raw_milestone_data <- app_data$rdm_dat$milestone_selfevaluation_c33c
-        message("Found raw self milestone data in rdm_dat")
-      }
-    }
-    
-    # Fallback: pull fresh data
-    if (is.null(raw_milestone_data) && !is.null(app_data$rdm_token) && !is.null(app_data$url)) {
-      message("Pulling fresh self milestone data...")
-      tryCatch({
-        raw_data <- forms_api_pull(app_data$rdm_token, app_data$url, 'milestone_selfevaluation_c33c')
-        if (is.list(raw_data) && "milestone_selfevaluation_c33c" %in% names(raw_data)) {
-          raw_milestone_data <- raw_data$milestone_selfevaluation_c33c
-        } else if (is.data.frame(raw_data)) {
-          raw_milestone_data <- raw_data
-        }
-        message("Successfully pulled fresh self milestone data")
-      }, error = function(e) {
-        message("Error pulling fresh self milestone data: ", e$message)
-      })
-    }
-    
+  # FIXED: Use the separate description data
+  milestone_data <- if (source_type == "self") {
+    app_data$s_miles_descriptions
   } else {
-    # Program milestones
-    if (!is.null(app_data$rdm_dat) && is.list(app_data$rdm_dat)) {
-      if ("milestone_entry" %in% names(app_data$rdm_dat)) {
-        raw_milestone_data <- app_data$rdm_dat$milestone_entry
-        message("Found raw program milestone data in rdm_dat")
-      }
-    }
-    
-    # Fallback: pull fresh data
-    if (is.null(raw_milestone_data) && !is.null(app_data$rdm_token) && !is.null(app_data$url)) {
-      message("Pulling fresh program milestone data...")
-      tryCatch({
-        raw_data <- forms_api_pull(app_data$rdm_token, app_data$url, 'milestone_entry')
-        if (is.list(raw_data) && "milestone_entry" %in% names(raw_data)) {
-          raw_milestone_data <- raw_data$milestone_entry
-        } else if (is.data.frame(raw_data)) {
-          raw_milestone_data <- raw_data
-        }
-        message("Successfully pulled fresh program milestone data")
-      }, error = function(e) {
-        message("Error pulling fresh program milestone data: ", e$message)
-      })
-    }
+    app_data$p_miles_descriptions
   }
   
-  if (is.null(raw_milestone_data)) {
-    message("No raw milestone data available")
+  if (is.null(milestone_data)) {
+    message("No milestone description data available for source_type: ", source_type)
     return(create_empty_milestone_table(source_type))
   }
   
-  message("Raw milestone data has ", nrow(raw_milestone_data), " rows and ", ncol(raw_milestone_data), " columns")
-  message("Available columns: ", paste(head(names(raw_milestone_data), 15), collapse = ", "))
+  # Filter for this resident and period
+  filtered_data <- milestone_data %>%
+    filter(name == resident_name, period == period)
   
-  # STEP 3: Find resident by record_id (not name)
-  resident_rows <- NULL
-  
-  # Try different ways to find the resident
-  if ("record_id" %in% names(raw_milestone_data)) {
-    # Try exact match
-    resident_rows <- raw_milestone_data[raw_milestone_data$record_id == record_id & !is.na(raw_milestone_data$record_id), ]
-    message("Found ", nrow(resident_rows), " rows by exact record_id match")
-    
-    # If no exact match, try as character
-    if (nrow(resident_rows) == 0) {
-      resident_rows <- raw_milestone_data[as.character(raw_milestone_data$record_id) == as.character(record_id) & !is.na(raw_milestone_data$record_id), ]
-      message("Found ", nrow(resident_rows), " rows by character record_id match")
-    }
-  }
-  
-  # Try redcap_survey_identifier if record_id didn't work
-  if ((is.null(resident_rows) || nrow(resident_rows) == 0) && "redcap_survey_identifier" %in% names(raw_milestone_data)) {
-    # Look for patterns that might match our resident
-    identifier_patterns <- c(record_id, paste0("record-", record_id), paste0("id-", record_id))
-    
-    for (pattern in identifier_patterns) {
-      survey_rows <- raw_milestone_data[!is.na(raw_milestone_data$redcap_survey_identifier) & 
-                                          grepl(pattern, raw_milestone_data$redcap_survey_identifier, ignore.case = TRUE), ]
-      if (nrow(survey_rows) > 0) {
-        resident_rows <- survey_rows
-        message("Found ", nrow(resident_rows), " rows by survey identifier pattern: ", pattern)
-        break
-      }
-    }
-  }
-  
-  # Debug: show what record_ids are available
-  if (is.null(resident_rows) || nrow(resident_rows) == 0) {
-    available_records <- unique(raw_milestone_data$record_id[!is.na(raw_milestone_data$record_id)])
-    message("Available record_ids in raw data: ", paste(head(available_records, 10), collapse = ", "))
-    
-    if ("redcap_survey_identifier" %in% names(raw_milestone_data)) {
-      available_identifiers <- unique(raw_milestone_data$redcap_survey_identifier[!is.na(raw_milestone_data$redcap_survey_identifier)])
-      message("Available survey identifiers: ", paste(head(available_identifiers, 5), collapse = ", "))
-    }
-    
-    message("Looking for record_id: ", record_id, " (class: ", class(record_id), ")")
+  if (nrow(filtered_data) == 0) {
+    message("No data found for ", resident_name, " in period ", period)
     return(create_empty_milestone_table(source_type))
   }
   
-  message("Found resident data with ", nrow(resident_rows), " total rows")
+  # Get the first row
+  data_row <- filtered_data[1, ]
   
-  # STEP 4: Filter by period
-  period_field <- if (source_type == "self") "prog_mile_period_self" else "prog_mile_period"
+  message("Available columns: ", paste(names(data_row), collapse = ", "))
   
-  if (period_field %in% names(resident_rows)) {
-    # Try exact period match first
-    period_rows <- resident_rows[!is.na(resident_rows[[period_field]]) & 
-                                   resident_rows[[period_field]] == period, ]
-    message("Found ", nrow(period_rows), " rows for exact period match: ", period)
-    
-    # If no exact match, try some common period variations
-    if (nrow(period_rows) == 0) {
-      message("Trying period variations...")
-      available_periods <- unique(resident_rows[[period_field]][!is.na(resident_rows[[period_field]])])
-      message("Available periods: ", paste(available_periods, collapse = ", "))
-      
-      # Try some common mappings
-      period_alternatives <- c(
-        period,
-        gsub(" ", "", period),  # Remove spaces
-        gsub("End ", "", period),  # "End Intern" -> "Intern"
-        gsub("Mid ", "", period),  # "Mid Intern" -> "Intern" 
-        paste0("End ", gsub("End ", "", period)),  # Ensure "End" prefix
-        paste0("Mid ", gsub("Mid ", "", period))   # Ensure "Mid" prefix
-      )
-      
-      for (alt_period in period_alternatives) {
-        alt_rows <- resident_rows[!is.na(resident_rows[[period_field]]) & 
-                                    resident_rows[[period_field]] == alt_period, ]
-        if (nrow(alt_rows) > 0) {
-          period_rows <- alt_rows
-          message("Found ", nrow(period_rows), " rows for alternative period: ", alt_period)
-          break
-        }
-      }
-    }
-  } else {
-    message("Period field ", period_field, " not found, using all resident rows")
-    period_rows <- resident_rows
-  }
+  # Look for description fields
+  desc_fields <- names(data_row)[grepl("_desc", names(data_row))]
+  message("Found description fields: ", paste(desc_fields, collapse = ", "))
   
-  if (nrow(period_rows) == 0) {
-    message("No data found for any period variation")
-    return(create_empty_milestone_table(source_type))
-  }
+  # Define milestone mapping
+  milestone_fields <- list(
+    "PC1: History" = list(
+      score = "PC1",
+      desc = if (source_type == "self") "rep_pc1_self_desc" else "rep_pc1_desc"
+    ),
+    "PC2: Physical Examination" = list(
+      score = "PC2",
+      desc = if (source_type == "self") "rep_pc2_self_desc" else "rep_pc2_desc"
+    ),
+    "PC3: Clinical Reasoning" = list(
+      score = "PC3",
+      desc = if (source_type == "self") "rep_pc3_self_desc" else "rep_pc3_desc"
+    ),
+    "PC4: Patient Management - Inpatient" = list(
+      score = "PC4",
+      desc = if (source_type == "self") "rep_pc4_self_desc" else "rep_pc4_desc"
+    ),
+    "PC5: Patient Management - Outpatient" = list(
+      score = "PC5",
+      desc = if (source_type == "self") "rep_pc5_self_desc" else "rep_pc5_desc"
+    ),
+    "PC6: Digital Health" = list(
+      score = "PC6",
+      desc = if (source_type == "self") "rep_pc6_self_desc" else "rep_pc6_desc"
+    ),
+    "MK1: Applied Foundational Sciences" = list(
+      score = "MK1",
+      desc = if (source_type == "self") "rep_mk1_self_desc" else "rep_mk1_desc"
+    ),
+    "MK2: Therapeutic Knowledge" = list(
+      score = "MK2",
+      desc = if (source_type == "self") "rep_mk2_self_desc" else "rep_mk2_desc"
+    ),
+    "MK3: Knowledge of Diagnostic Testing" = list(
+      score = "MK3",
+      desc = if (source_type == "self") "rep_mk3_self_desc" else "rep_mk3_desc"
+    ),
+    "SBP1: Patient Safety and Quality Improvement" = list(
+      score = "SBP1",
+      desc = if (source_type == "self") "rep_sbp1_self_desc" else "rep_sbp1_desc",
+      desc2 = if (source_type == "self") "rep_sbp1_self_desc2" else NULL
+    ),
+    "SBP2: System Navigation for Patient-Centered Care" = list(
+      score = "SBP2",
+      desc = if (source_type == "self") "rep_sbp2_self_desc" else "rep_sbp2_desc"
+    ),
+    "SBP3: Physician Role in Health Care Systems" = list(
+      score = "SBP3",
+      desc = if (source_type == "self") "rep_sbp3_self_desc" else "rep_sbp3_desc"
+    ),
+    "PBLI1: Evidence-Based and Informed Practice" = list(
+      score = "PBL1",
+      desc = if (source_type == "self") "rep_pbl1_self_desc" else "rep_pbl1_desc"
+    ),
+    "PBLI2: Reflective Practice and Commitment to Personal Growth" = list(
+      score = "PBL2",
+      desc = if (source_type == "self") "rep_pbl2_self_desc" else "rep_pbl2_desc"
+    ),
+    "PROF1: Professional Behavior" = list(
+      score = "PROF1",
+      desc = if (source_type == "self") "rep_prof1_self_desc" else "rep_prof1_desc"
+    ),
+    "PROF2: Ethical Principles" = list(
+      score = "PROF2",
+      desc = if (source_type == "self") "rep_prof2_self_desc" else "rep_prof2_desc"
+    ),
+    "PROF3: Accountability/Conscientiousness" = list(
+      score = "PROF3",
+      desc = if (source_type == "self") "rep_prof3_self_desc" else "rep_prof3_desc"
+    ),
+    "PROF4: Knowledge of Systemic and Individual Factors of Well-Being" = list(
+      score = "PROF4",
+      desc = if (source_type == "self") "rep_prof4_self_desc" else "rep_prof4_desc"
+    ),
+    "ICS1: Patient- and Family-Centered Communication" = list(
+      score = "ICS1",
+      desc = if (source_type == "self") "rep_ics1_self_desc" else "rep_ics1_desc"
+    ),
+    "ICS2: Interprofessional and Team Communication" = list(
+      score = "ICS2",
+      desc = if (source_type == "self") "rep_ics2_self_desc" else "rep_ics2_desc"
+    ),
+    "ICS3: Communication within Health Care Systems" = list(
+      score = "ICS3",
+      desc = if (source_type == "self") "rep_ics3_self_desc" else "rep_ics3_desc"
+    )
+  )
   
-  # Get the most recent row
-  data_row <- period_rows[1, ]
-  message("Using data row with these available fields: ", paste(names(data_row), collapse = ", "))
-  
-  # STEP 5: Extract milestone data using the correct field names
+  # Build results table - FIXED: Only include milestones with actual description text
   results <- data.frame(
     Milestone = character(0),
     Score = character(0),
@@ -2128,96 +2082,6 @@ create_milestone_description_table <- function(resident_name, period, source_typ
     stringsAsFactors = FALSE
   )
   
-  # Define milestone fields based on what we saw in your CSV files
-  milestone_fields <- list(
-    "PC1: History" = list(
-      score = if (source_type == "self") "rep_pc1_self" else "rep_pc1",
-      desc = if (source_type == "self") "rep_pc1_self_desc" else "rep_pc1_desc"
-    ),
-    "PC2: Physical Examination" = list(
-      score = if (source_type == "self") "rep_pc2_self" else "rep_pc2",
-      desc = if (source_type == "self") "rep_pc2_self_desc" else "rep_pc2_desc"
-    ),
-    "PC3: Clinical Reasoning" = list(
-      score = if (source_type == "self") "rep_pc3_self" else "rep_pc3",
-      desc = if (source_type == "self") "rep_pc3_self_desc" else "rep_pc3_desc"
-    ),
-    "PC4: Patient Management - Inpatient" = list(
-      score = if (source_type == "self") "rep_pc4_self" else "rep_pc4",
-      desc = if (source_type == "self") "rep_pc4_self_desc" else "rep_pc4_desc"
-    ),
-    "PC5: Patient Management - Outpatient" = list(
-      score = if (source_type == "self") "rep_pc5_self" else "rep_pc5",
-      desc = if (source_type == "self") "rep_pc5_self_desc" else "rep_pc5_desc"
-    ),
-    "PC6: Digital Health" = list(
-      score = if (source_type == "self") "rep_pc6_self" else "rep_pc6",
-      desc = if (source_type == "self") "rep_pc6_self_desc" else "rep_pc6_desc"
-    ),
-    "MK1: Applied Foundational Sciences" = list(
-      score = if (source_type == "self") "rep_mk1_self" else "rep_mk1",
-      desc = if (source_type == "self") "rep_mk1_self_desc" else "rep_mk1_desc"
-    ),
-    "MK2: Therapeutic Knowledge" = list(
-      score = if (source_type == "self") "rep_mk2_self" else "rep_mk2",
-      desc = if (source_type == "self") "rep_mk2_self_desc" else "rep_mk2_desc"
-    ),
-    "MK3: Knowledge of Diagnostic Testing" = list(
-      score = if (source_type == "self") "rep_mk3_self" else "rep_mk3",
-      desc = if (source_type == "self") "rep_mk3_self_desc" else "rep_mk3_desc"
-    ),
-    "SBP1: Patient Safety and Quality Improvement" = list(
-      score = if (source_type == "self") "rep_sbp1_self" else "rep_sbp1",
-      desc = if (source_type == "self") "rep_sbp1_self_desc" else "rep_sbp1_desc",
-      desc2 = if (source_type == "self") "rep_sbp1_self_desc2" else NULL
-    ),
-    "SBP2: System Navigation for Patient-Centered Care" = list(
-      score = if (source_type == "self") "rep_sbp2_self" else "rep_sbp2",
-      desc = if (source_type == "self") "rep_sbp2_self_desc" else "rep_sbp2_desc"
-    ),
-    "SBP3: Physician Role in Health Care Systems" = list(
-      score = if (source_type == "self") "rep_sbp3_self" else "rep_sbp3",
-      desc = if (source_type == "self") "rep_sbp3_self_desc" else "rep_sbp3_desc"
-    ),
-    "PBLI1: Evidence-Based and Informed Practice" = list(
-      score = if (source_type == "self") "rep_pbl1_self" else "rep_pbl1",
-      desc = if (source_type == "self") "rep_pbl1_self_desc" else "rep_pbl1_desc"
-    ),
-    "PBLI2: Reflective Practice and Commitment to Personal Growth" = list(
-      score = if (source_type == "self") "rep_pbl2_self" else "rep_pbl2",
-      desc = if (source_type == "self") "rep_pbl2_self_desc" else "rep_pbl2_desc"
-    ),
-    "PROF1: Professional Behavior" = list(
-      score = if (source_type == "self") "rep_prof1_self" else "rep_prof1",
-      desc = if (source_type == "self") "rep_prof1_self_desc" else "rep_prof1_desc"
-    ),
-    "PROF2: Ethical Principles" = list(
-      score = if (source_type == "self") "rep_prof2_self" else "rep_prof2",
-      desc = if (source_type == "self") "rep_prof2_self_desc" else "rep_prof2_desc"
-    ),
-    "PROF3: Accountability/Conscientiousness" = list(
-      score = if (source_type == "self") "rep_prof3_self" else "rep_prof3",
-      desc = if (source_type == "self") "rep_prof3_self_desc" else "rep_prof3_desc"
-    ),
-    "PROF4: Knowledge of Systemic and Individual Factors of Well-Being" = list(
-      score = if (source_type == "self") "rep_prof4_self" else "rep_prof4",
-      desc = if (source_type == "self") "rep_prof4_self_desc" else "rep_prof4_desc"
-    ),
-    "ICS1: Patient- and Family-Centered Communication" = list(
-      score = if (source_type == "self") "rep_ics1_self" else "rep_ics1",
-      desc = if (source_type == "self") "rep_ics1_self_desc" else "rep_ics1_desc"
-    ),
-    "ICS2: Interprofessional and Team Communication" = list(
-      score = if (source_type == "self") "rep_ics2_self" else "rep_ics2",
-      desc = if (source_type == "self") "rep_ics2_self_desc" else "rep_ics2_desc"
-    ),
-    "ICS3: Communication within Health Care Systems" = list(
-      score = if (source_type == "self") "rep_ics3_self" else "rep_ics3",
-      desc = if (source_type == "self") "rep_ics3_self_desc" else "rep_ics3_desc"
-    )
-  )
-  
-  # Extract data for each milestone
   for (milestone_name in names(milestone_fields)) {
     fields <- milestone_fields[[milestone_name]]
     
@@ -2227,16 +2091,20 @@ create_milestone_description_table <- function(resident_name, period, source_typ
       score_val <- data_row[[fields$score]]
     }
     
-    # Get description
+    # Get description - FIXED: Check if description actually has content
     desc_val <- ""
+    has_desc_content <- FALSE
+    
     if (fields$desc %in% names(data_row)) {
       desc_temp <- data_row[[fields$desc]]
       if (!is.na(desc_temp) && trimws(desc_temp) != "") {
         desc_val <- trimws(desc_temp)
+        has_desc_content <- TRUE
+        message("Found description for ", milestone_name, ": ", substr(desc_val, 1, 50), "...")
       }
     }
     
-    # Handle SBP1 desc2 if it exists
+    # Handle SBP1 desc2 - also check for content
     if ("desc2" %in% names(fields) && !is.null(fields$desc2)) {
       if (fields$desc2 %in% names(data_row)) {
         desc_temp2 <- data_row[[fields$desc2]]
@@ -2246,31 +2114,35 @@ create_milestone_description_table <- function(resident_name, period, source_typ
           } else {
             desc_val <- trimws(desc_temp2)
           }
+          has_desc_content <- TRUE
         }
       }
     }
     
-    # Only include if there's actual data
-    if ((!is.na(score_val) && score_val != 0) || desc_val != "") {
+    # FIXED: Only include if there's ACTUAL description text (not just a score)
+    if (has_desc_content) {
       score_display <- if (is.na(score_val) || score_val == 0) "Not Assessed" else as.character(score_val)
-      desc_display <- if (desc_val == "") "No comments provided" else desc_val
       
       results <- rbind(results, data.frame(
         Milestone = milestone_name,
         Score = score_display,
-        Description = desc_display,
+        Description = desc_val,
         stringsAsFactors = FALSE
       ))
+      
+      message("Added milestone with description: ", milestone_name)
+    } else {
+      message("Skipped milestone with no description: ", milestone_name)
     }
   }
   
-  message("Successfully created table with ", nrow(results), " milestone entries")
+  message("Created table with ", nrow(results), " milestones that have description text")
   
   if (nrow(results) == 0) {
     return(create_empty_milestone_table(source_type))
   }
   
-  # Create and return the DataTable
+  # Create DataTable
   DT::datatable(
     results,
     options = list(
