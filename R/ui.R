@@ -1,8 +1,3 @@
-# ============================================================================
-# MINOR UI FIXES - Preserving Your Original Unfolding Logic
-# Only fixing specific issues, not restructuring
-# ============================================================================
-
 ui <- page_fluid(
   theme = bs_theme(
     version = 5,
@@ -22,17 +17,36 @@ ui <- page_fluid(
   # Load CSS from separate file
   includeCSS("www/styles.css"),
   
-  # JavaScript for opening resident dashboard with auto-filled access code
+  # Enhanced JavaScript for opening resident dashboard with auto-filled access code
   tags$script(HTML("
     function openResidentDashboard() {
-      // Get the access code from the displayed text
-      var accessCodeElement = document.querySelector('[data-access-code]');
+      // Get the access code from the displayed text - multiple approaches
       var accessCode = '';
       
-      if (accessCodeElement) {
-        accessCode = accessCodeElement.textContent || accessCodeElement.innerText;
+      // Try different selectors to find the access code
+      var codeElement = document.querySelector('code.access-code-display') || 
+                       document.querySelector('code.bg-warning') || 
+                       document.querySelector('[data-access-code]') ||
+                       document.querySelector('#display_access_code');
+      
+      if (codeElement) {
+        accessCode = codeElement.textContent || codeElement.innerText;
         accessCode = accessCode.trim();
       }
+      
+      // Fallback: try to get from any code element
+      if (!accessCode) {
+        var codeElements = document.querySelectorAll('code');
+        for (var i = 0; i < codeElements.length; i++) {
+          var text = codeElements[i].textContent || codeElements[i].innerText;
+          if (text && text.trim().length >= 4 && text.trim().length <= 20) {
+            accessCode = text.trim();
+            break;
+          }
+        }
+      }
+      
+      console.log('Access code found:', accessCode);
       
       // Base URL for the resident dashboard
       var baseUrl = 'https://01958bd2-2c58-32d8-e506-7e75564664d5.share.connect.posit.cloud';
@@ -40,29 +54,16 @@ ui <- page_fluid(
       // Open new window with the dashboard
       var newWindow = window.open(baseUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
-      // If we have an access code, try to auto-fill it after a short delay
+      // If we have an access code, show it to the user for manual entry
       if (accessCode && newWindow) {
+        // Create a temporary notification to show the access code
         setTimeout(function() {
-          try {
-            // Try to access the new window and fill the access code
-            var accessInput = newWindow.document.querySelector('input[id*=\"access\"], input[placeholder*=\"access\"], input[placeholder*=\"code\"]');
-            if (accessInput) {
-              accessInput.value = accessCode;
-              // Try to trigger the submit or enter key
-              var event = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                code: 'Enter',
-                which: 13,
-                keyCode: 13,
-                bubbles: true
-              });
-              accessInput.dispatchEvent(event);
-            }
-          } catch (e) {
-            // Cross-origin restrictions may prevent auto-fill
-            console.log('Auto-fill blocked by browser security - user will need to enter access code manually');
-          }
-        }, 2000); // Wait 2 seconds for page to load
+          alert('Resident Dashboard Access Code: ' + accessCode + '\\n\\nPlease enter this code in the new window that just opened.');
+        }, 1000);
+      } else if (newWindow) {
+        setTimeout(function() {
+          alert('Resident Dashboard opened in new window.\\n\\nPlease check for the access code on this page and enter it manually.');
+        }, 1000);
       }
     }
   ")),
@@ -381,35 +382,84 @@ ui <- page_fluid(
         id = "ccc-review-pages",
         style = "display: none;",
         
-        # Back button and resident info header
+        # ENHANCED Back button and resident info header with PROMINENT dashboard link
         fluidRow(
           column(12,
                  div(
-                   class = "d-flex justify-content-between align-items-center mb-4 p-3 bg-light rounded",
-                   div(
-                     actionButton("back_to_dashboard", "← Back to Dashboard", 
-                                  class = "btn-secondary"),
-                     span(" > Review Details", class = "text-muted ms-2")
-                   ),
-                   div(
-                     class = "resident-info-header text-end",
-                     h4(textOutput("display_resident_name", inline = TRUE), 
-                        class = "text-primary mb-1"),
-                     div(
-                       class = "text-muted",
-                       "Coach: ", textOutput("display_primary_coach", inline = TRUE), " | ",
-                       "Access Code: ", 
-                       tags$code(
-                         textOutput("display_access_code", inline = TRUE),
-                         class = "bg-warning text-dark px-2 py-1 rounded"
-                       ),
-                       # Link to open resident dashboard in new window
-                       tags$a(
-                         href = "#",
-                         onclick = "openResidentDashboard()",
-                         title = "Open Resident Dashboard in New Window",
-                         class = "text-primary ms-2",
-                         icon("external-link-alt")
+                   class = "resident-header-section mb-4 p-4 bg-light rounded shadow-sm",
+                   fluidRow(
+                     # Left side - Back button and breadcrumb
+                     column(
+                       width = 4,
+                       div(
+                         class = "d-flex align-items-center",
+                         actionButton("back_to_dashboard", "← Back to Dashboard", 
+                                      class = "btn-secondary me-3"),
+                         span(" > Review Details", class = "text-muted")
+                       )
+                     ),
+                     
+                     # Center - Resident info
+                     column(
+                       width = 4,
+                       div(
+                         class = "text-center",
+                         h4(textOutput("display_resident_name", inline = TRUE), 
+                            class = "text-primary mb-2 fw-bold"),
+                         div(
+                           class = "text-muted mb-2",
+                           "Coach: ", textOutput("display_primary_coach", inline = TRUE)
+                         ),
+                         div(
+                           class = "access-code-section",
+                           "Access Code: ",
+                           tags$code(
+                             textOutput("display_access_code", inline = TRUE),
+                             class = "access-code-display bg-warning text-dark px-3 py-2 rounded fw-bold fs-6"
+                           )
+                         )
+                       )
+                     ),
+                     
+                     # Right side - PROMINENT Resident Dashboard Link
+                     column(
+                       width = 4,
+                       div(
+                         class = "text-end",
+                         # LARGE, PROMINENT button for resident dashboard
+                         tags$button(
+                           class = "btn btn-info btn-lg px-4 py-3 resident-dashboard-btn",
+                           onclick = "openResidentDashboard()",
+                           style = "
+                             border-radius: 12px; 
+                             font-weight: 600; 
+                             box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+                             background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+                             border: none;
+                             transform: scale(1);
+                             transition: all 0.2s ease;
+                           ",
+                           # JavaScript for hover effect
+                           onmouseover = "this.style.transform='scale(1.05)'; this.style.boxShadow='0 6px 12px rgba(0,0,0,0.2)';",
+                           onmouseout = "this.style.transform='scale(1)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.15)';",
+                           div(
+                             class = "d-flex align-items-center justify-content-center",
+                             icon("external-link-alt", class = "fa-lg me-2"),
+                             div(
+                               div("Open Resident", class = "fw-bold"),
+                               div("Dashboard", class = "fw-bold"),
+                               tags$small("(New Window)", class = "text-light opacity-75")
+                             )
+                           )
+                         ),
+                         # Small helper text
+                         div(
+                           class = "mt-2",
+                           tags$small(
+                             "Click to open resident's coaching dashboard",
+                             class = "text-muted fst-italic"
+                           )
+                         )
                        )
                      )
                    )
@@ -623,16 +673,20 @@ ui <- page_fluid(
                             div(
                               class = "d-flex align-items-center mb-4",
                               icon("tasks", class = "fa-xl text-primary me-3"),
-                              h4("Action Items", class = "text-primary mb-0")
+                              h4("Program Follow-up Items", class = "text-primary mb-0")
                             ),
                             
-                            # Action Items Checkbox
+                            # Action Items Checkbox - NOW ALWAYS VISIBLE (not dependent on concerns)
                             div(
                               class = "mb-3",
                               checkboxInput(
                                 "has_action_items",
                                 "Are there action items for program follow-up?",
                                 value = FALSE
+                              ),
+                              tags$small(
+                                class = "text-muted",
+                                "Check this box if there are any administrative or follow-up items needed, regardless of whether there are CCC concerns."
                               )
                             ),
                             
@@ -646,6 +700,15 @@ ui <- page_fluid(
                                     "ccc_fu_resp",
                                     "Person Responsible:",
                                     placeholder = "Enter person responsible for follow-up..."
+                                  )
+                                ),
+                                column(
+                                  width = 6,
+                                  dateInput(
+                                    "ccc_fu_date",
+                                    "Follow-up Date:",
+                                    value = NULL,
+                                    min = Sys.Date()
                                   )
                                 ),
                                 column(
@@ -878,16 +941,20 @@ ui <- page_fluid(
                               div(
                                 class = "d-flex align-items-center mb-4",
                                 icon("tasks", class = "fa-xl text-primary me-3"),
-                                h4("Action Items", class = "text-primary mb-0")
+                                h4("Program Follow-up Items", class = "text-primary mb-0")
                               ),
                               
-                              # Action Items Checkbox
+                              # Action Items Checkbox - NOW ALWAYS VISIBLE (not dependent on concerns)
                               div(
                                 class = "mb-3",
                                 checkboxInput(
                                   "has_action_items",
                                   "Are there action items for program follow-up?",
                                   value = FALSE
+                                ),
+                                tags$small(
+                                  class = "text-muted",
+                                  "Check this box if there are any administrative or follow-up items needed, regardless of whether there are CCC concerns."
                                 )
                               ),
                               
@@ -901,6 +968,15 @@ ui <- page_fluid(
                                       "ccc_fu_resp",
                                       "Person Responsible:",
                                       placeholder = "Enter person responsible for follow-up..."
+                                    )
+                                  ),
+                                  column(
+                                    width = 6,
+                                    dateInput(
+                                      "ccc_fu_date",
+                                      "Follow-up Date:",
+                                      value = NULL,
+                                      min = Sys.Date()
                                     )
                                   ),
                                   column(
@@ -961,75 +1037,108 @@ ui <- page_fluid(
           id = "milestone-review-section",
           style = "display: none;",
           
-          # Fixed Header with Graphs
-          div(
-            class = "milestone-graphs-header sticky-top bg-white border-bottom shadow-sm p-3 mb-4",
-            style = "z-index: 1020;",
-            
-            # Milestone Plots - Fixed at top
-            fluidRow(
-              column(
-                width = 6,
-                div(
-                  class = "text-center mb-2",
-                  h6("Current Self-Assessment", class = "text-primary mb-1"),
-                  tags$small("Resident's self-evaluation", class = "text-muted")
+          # Milestone Plots Section
+          fluidRow(
+            column(
+              width = 12,
+              card(
+                card_header("Step 3: Milestone Assessment",
+                            `data-card-type` = "milestone-plots"
                 ),
-                div(
-                  class = "milestone-plot-container",
-                  style = "height: 300px; border: 1px solid #dee2e6; border-radius: 4px;",
-                  plotOutput("self_milestones_plot", height = "300px")
-                )
-              ),
-              column(
-                width = 6,
-                div(
-                  class = "text-center mb-2",
-                  h6("Current Program Assessment", class = "text-success mb-1"),
-                  tags$small("Faculty assessment", class = "text-muted")
-                ),
-                div(
-                  class = "milestone-plot-container", 
-                  style = "height: 300px; border: 1px solid #dee2e6; border-radius: 4px;",
-                  plotOutput("program_milestones_plot", height = "300px")
-                )
-              )
-            )
-          ),
-          
-          # Scrollable Milestone Content
-          div(
-            class = "milestone-content-scrollable",
-            style = "padding-top: 20px;",
-            
-            # Secondary Review Comments (if available)
-            conditionalPanel(
-              condition = "output.has_second_comments",
-              fluidRow(
-                column(
-                  width = 12,
-                  card(
-                    card_header("Secondary Review Comments",
-                                `data-card-type` = "second-comments"
+                card_body(
+                  # Milestone Plots
+                  fluidRow(
+                    # Self-Assessment Milestones Plot
+                    column(
+                      width = 6,
+                      div(
+                        class = "text-center mb-3",
+                        h5("Current Self-Assessment", class = "text-primary"),
+                        p("Resident's self-evaluation for this period", class = "text-muted small")
+                      ),
+                      div(
+                        class = "milestone-plot-container",
+                        style = "min-height: 400px;",
+                        plotOutput("self_milestones_plot", height = "400px")
+                      ),
+                      
+                      # Self-Assessment Description Table (Collapsible)
+                      div(
+                        class = "mt-3",
+                        tags$button(
+                          class = "btn btn-outline-primary btn-sm",
+                          type = "button",
+                          `data-bs-toggle` = "collapse",
+                          `data-bs-target` = "#selfDescriptionsCollapse",
+                          `aria-expanded` = "false",
+                          `aria-controls` = "selfDescriptionsCollapse",
+                          icon("chevron-down", class = "me-2"),
+                          "Show Self-Assessment Descriptions"
+                        ),
+                        div(
+                          class = "collapse mt-2",
+                          id = "selfDescriptionsCollapse",
+                          div(
+                            class = "card card-body milestone-description-card",
+                            style = "background-color: #f8f9ff; border: 1px solid #e3f2fd;",
+                            h6("Self-Assessment Milestone Descriptions", class = "text-primary mb-3"),
+                            div(
+                              style = "max-height: 300px; overflow-y: auto;",
+                              DT::dataTableOutput("self_milestone_descriptions")
+                            )
+                          )
+                        )
+                      )
                     ),
-                    card_body(
-                      uiOutput("second_comments_display")
+                    
+                    # Program Milestones Plot  
+                    column(
+                      width = 6,
+                      div(
+                        class = "text-center mb-3",
+                        h5("Current Program Assessment", class = "text-success"),
+                        p("Faculty assessment for this period", class = "text-muted small")
+                      ),
+                      div(
+                        class = "milestone-plot-container", 
+                        style = "min-height: 400px;",
+                        plotOutput("program_milestones_plot", height = "400px")
+                      ),
+                      
+                      # Program Assessment Description Table (Collapsible)
+                      div(
+                        class = "mt-3",
+                        tags$button(
+                          class = "btn btn-outline-success btn-sm",
+                          type = "button",
+                          `data-bs-toggle` = "collapse",
+                          `data-bs-target` = "#programDescriptionsCollapse",
+                          `aria-expanded` = "false",
+                          `aria-controls` = "programDescriptionsCollapse",
+                          icon("chevron-down", class = "me-2"),
+                          "Show Program Assessment Descriptions"
+                        ),
+                        div(
+                          class = "collapse mt-2",
+                          id = "programDescriptionsCollapse",
+                          div(
+                            class = "card card-body milestone-description-card",
+                            style = "background-color: #f0fff4; border: 1px solid #d4edda;",
+                            h6("Program Assessment Milestone Descriptions", class = "text-success mb-3"),
+                            div(
+                              style = "max-height: 300px; overflow-y: auto;",
+                              DT::dataTableOutput("program_milestone_descriptions")
+                            )
+                          )
+                        )
+                      )
                     )
-                  )
-                )
-              ),
-              br()
-            ),
-            
-            # Milestone Interface
-            fluidRow(
-              column(
-                width = 12,
-                card(
-                  card_header("Step 3: Milestone Assessment",
-                              `data-card-type` = "milestone-assessment"
                   ),
-                  card_body(
+                  
+                  br(),
+                  
+                  # Milestone Assessment Interface
+                  div(
                     # Special note for Intern Intro
                     conditionalPanel(
                       condition = "input.ccc_session == '7'",
@@ -1046,22 +1155,20 @@ ui <- page_fluid(
                       condition = "input.ccc_session != '7'",
                       uiOutput("milestone_interface_content")
                     )
+                  ),
+                  
+                  # Navigation buttons
+                  div(
+                    class = "text-center mt-4 pt-4 border-top",
+                    actionButton(
+                      "back_to_step2",
+                      "← Back to Review Details",
+                      class = "btn-secondary me-3"
+                    ),
+                    uiOutput("final_submit_button", inline = TRUE)
                   )
                 )
               )
-            ),
-            
-            br(),
-            
-            # Final Submit Button
-            div(
-              class = "text-center mb-4",
-              actionButton(
-                "back_to_step2",
-                "← Back to Review Details",
-                class = "btn-secondary me-3"
-              ),
-              uiOutput("final_submit_button", inline = TRUE)
             )
           )
         )

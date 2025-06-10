@@ -1262,6 +1262,75 @@ server <- function(input, output, session) {
     }
   })
   
+  # UPDATED: Self-Assessment Milestone Descriptions Table with debugging
+  output$self_milestone_descriptions <- DT::renderDataTable({
+    req(values$selected_resident)
+    req(values$redcap_period)
+    
+    data <- app_data()
+    
+    message("=== RENDERING SELF MILESTONE DESCRIPTIONS ===")
+    message("Resident: ", values$selected_resident$name)
+    message("Period: ", values$redcap_period)
+    
+    # Debug the data structure
+    debug_milestone_data(data, values$selected_resident$name, values$redcap_period)
+    
+    # Check if we have milestone data
+    if (!is.null(data$s_miles)) {
+      message("s_miles data available, creating table...")
+      create_milestone_description_table(
+        resident_name = values$selected_resident$name,
+        period = values$redcap_period,
+        source_type = "self",
+        app_data = data
+      )
+    } else {
+      message("No s_miles data available")
+      create_empty_milestone_table("self")
+    }
+  })
+  
+  # UPDATED: Program Milestone Descriptions Table with debugging
+  output$program_milestone_descriptions <- DT::renderDataTable({
+    req(values$selected_resident)
+    req(values$redcap_period)
+    
+    data <- app_data()
+    
+    message("=== RENDERING PROGRAM MILESTONE DESCRIPTIONS ===")
+    message("Resident: ", values$selected_resident$name)
+    message("Period: ", values$redcap_period)
+    
+    # Get current period for program milestones
+    current_app_period <- get_current_period()
+    current_mile_period <- map_to_milestone_period(
+      values$selected_resident$Level, 
+      current_app_period,
+      form_context = "milestone"
+    )
+    
+    message("Current app period: ", current_app_period)
+    message("Current mile period: ", ifelse(is.na(current_mile_period), "NA", current_mile_period))
+    
+    # Debug the data structure
+    debug_milestone_data(data, values$selected_resident$name, current_mile_period)
+    
+    # Check if we have milestone data
+    if (!is.null(data$p_miles) && !is.na(current_mile_period)) {
+      message("p_miles data available, creating table...")
+      create_milestone_description_table(
+        resident_name = values$selected_resident$name,
+        period = current_mile_period,
+        source_type = "program",
+        app_data = data
+      )
+    } else {
+      message("No p_miles data available or no current period mapped")
+      create_empty_milestone_table("program")
+    }
+  })
+  
   # ============================================================================
   # COACH ILP AND SECONDARY REVIEW DISPLAYS
   # ============================================================================

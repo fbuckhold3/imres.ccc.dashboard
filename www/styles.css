@@ -456,3 +456,128 @@ div[data-card-type="resident-table"] {
   color: #1976d2 !important;
   font-size: 1.1em !important;
 }
+
+/* ============================================================================
+   MILESTONE DESCRIPTION TABLES STYLING
+   ============================================================================ */
+
+/* Collapsible button enhancements */
+.btn[data-bs-toggle="collapse"] {
+  transition: all 0.3s ease;
+  border-radius: 6px;
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.btn[data-bs-toggle="collapse"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Rotate chevron when expanded */
+.btn[data-bs-toggle="collapse"][aria-expanded="true"] .fa-chevron-down {
+  transform: rotate(180deg);
+  transition: transform 0.3s ease;
+}
+
+.btn[data-bs-toggle="collapse"][aria-expanded="false"] .fa-chevron-down {
+  transform: rotate(0deg);
+  transition: transform 0.3s ease;
+}
+
+/* Description table container styling */
+.milestone-description-container {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* Custom DataTable styling for milestone descriptions */
+.dataTables_wrapper .milestone-descriptions-table {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.milestone-descriptions-table tbody tr {
+  border-bottom: 1px solid #e9ecef;
+}
+
+.milestone-descriptions-table tbody tr:hover {
+  background-color: rgba(74, 144, 226, 0.05);
+}
+
+.milestone-descriptions-table td {
+  padding: 12px 8px;
+  vertical-align: top;
+}
+
+/* Milestone name column styling */
+.milestone-descriptions-table td:first-child {
+  font-weight: 600;
+  text-align: center;
+  background-color: #f8f9fa;
+  border-right: 2px solid #e9ecef;
+  min-width: 80px;
+  max-width: 100px;
+}
+
+/* Description column styling */
+.milestone-descriptions-table td:last-child {
+  line-height: 1.5;
+  word-wrap: break-word;
+  max-width: 400px;
+}
+
+/* Collapse animation enhancements */
+.collapse {
+  transition: all 0.35s ease;
+}
+
+.collapsing {
+  transition: height 0.35s ease;
+}
+
+/* Card styling for description containers */
+.milestone-description-card {
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  border-radius: 8px;
+}
+
+/* Self-assessment specific styling */
+#selfDescriptionsCollapse .card-body {
+  background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+  border-left: 4px solid #4a90e2;
+}
+
+/* Program assessment specific styling */
+#programDescriptionsCollapse .card-body {
+  background: linear-gradient(135deg, #f0fff4 0%, #d4edda 100%);
+  border-left: 4px solid #28a745;
+}
+
+/* Empty state styling */
+.milestone-descriptions-empty {
+  text-align: center;
+  padding: 20px;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .milestone-descriptions-table td:first-child {
+    min-width: 60px;
+    font-size: 12px;
+  }
+  
+  .milestone-descriptions-table td:last-child {
+    font-size: 13px;
+    max-width: 250px;
+  }
+  
+  .btn[data-bs-toggle="collapse"] {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+}

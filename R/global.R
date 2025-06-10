@@ -522,6 +522,117 @@ load_imres_data <- function(config) {
     })
   }
   
+  # get milestone descriptions
+  
+  milestone_descriptions <- tryCatch({
+    message("Getting raw milestone data with descriptions...")
+    
+    # Pull milestone_entry form (program milestones)
+    program_milestone_raw <- tryCatch({
+      message("Pulling milestone_entry form...")
+      result <- forms_api_pull(config$rdm_token, config$url, 'milestone_entry')
+      message("Successfully pulled milestone_entry form")
+      
+      # If it's a list, extract the milestone_entry component
+      if (is.list(result) && "milestone_entry" %in% names(result)) {
+        result$milestone_entry
+      } else if (is.data.frame(result)) {
+        result
+      } else {
+        message("Unexpected format for milestone_entry data")
+        NULL
+      }
+    }, error = function(e) {
+      message("Error pulling milestone_entry form: ", e$message)
+      NULL
+    })
+    
+    # Pull milestone_selfevaluation_c33c form (self milestones)
+    self_milestone_raw <- tryCatch({
+      message("Pulling milestone_selfevaluation_c33c form...")
+      result <- forms_api_pull(config$rdm_token, config$url, 'milestone_selfevaluation_c33c')
+      message("Successfully pulled milestone_selfevaluation_c33c form")
+      
+      # If it's a list, extract the component
+      if (is.list(result) && "milestone_selfevaluation_c33c" %in% names(result)) {
+        result$milestone_selfevaluation_c33c
+      } else if (is.data.frame(result)) {
+        result
+      } else {
+        message("Unexpected format for milestone_selfevaluation_c33c data")
+        NULL
+      }
+    }, error = function(e) {
+      message("Error pulling milestone_selfevaluation_c33c form: ", e$message)
+      NULL
+    })
+    
+    # Return both raw milestone datasets
+    list(
+      program_raw = program_milestone_raw,
+      self_raw = self_milestone_raw
+    )
+    
+  }, error = function(e) {
+    message("Error getting milestone descriptions: ", e$message)
+    list(program_raw = NULL, self_raw = NULL)
+  })
+  
+  
+  # --- Debug milestone forms structure ---
+  if (!is.null(milestone_descriptions$program_raw)) {
+    message("=== DEBUG: Program milestone raw data structure ===")
+    message("Program milestone data class: ", paste(class(milestone_descriptions$program_raw), collapse=", "))
+    if (is.data.frame(milestone_descriptions$program_raw)) {
+      message("Program milestone rows: ", nrow(milestone_descriptions$program_raw))
+      message("Program milestone columns: ", ncol(milestone_descriptions$program_raw))
+      
+      # Look for description columns
+      desc_cols <- names(milestone_descriptions$program_raw)[grepl("_desc$", names(milestone_descriptions$program_raw))]
+      if (length(desc_cols) > 0) {
+        message("Found ", length(desc_cols), " description columns in program data:")
+        message("Sample desc columns: ", paste(head(desc_cols, 5), collapse=", "))
+      } else {
+        message("No _desc columns found in program milestone data")
+      }
+      
+      # Look for period columns
+      period_cols <- names(milestone_descriptions$program_raw)[grepl("period", names(milestone_descriptions$program_raw), ignore.case = TRUE)]
+      if (length(period_cols) > 0) {
+        message("Found period columns in program data: ", paste(period_cols, collapse=", "))
+      }
+    }
+  } else {
+    message("Program milestone raw data is NULL")
+  }
+  
+  if (!is.null(milestone_descriptions$self_raw)) {
+    message("=== DEBUG: Self milestone raw data structure ===")
+    message("Self milestone data class: ", paste(class(milestone_descriptions$self_raw), collapse=", "))
+    if (is.data.frame(milestone_descriptions$self_raw)) {
+      message("Self milestone rows: ", nrow(milestone_descriptions$self_raw))
+      message("Self milestone columns: ", ncol(milestone_descriptions$self_raw))
+      
+      # Look for description columns
+      desc_cols <- names(milestone_descriptions$self_raw)[grepl("_desc$", names(milestone_descriptions$self_raw))]
+      if (length(desc_cols) > 0) {
+        message("Found ", length(desc_cols), " description columns in self data:")
+        message("Sample desc columns: ", paste(head(desc_cols, 5), collapse=", "))
+      } else {
+        message("No _desc columns found in self milestone data")
+      }
+      
+      # Look for period columns
+      period_cols <- names(milestone_descriptions$self_raw)[grepl("period", names(milestone_descriptions$self_raw), ignore.case = TRUE)]
+      if (length(period_cols) > 0) {
+        message("Found period columns in self data: ", paste(period_cols, collapse=", "))
+      }
+    }
+  } else {
+    message("Self milestone raw data is NULL")
+  }
+  
+  
   # --- Extract CCC review data ---
   ccc_review_data <- tryCatch({
     message("Starting CCC review data extraction")
@@ -594,7 +705,8 @@ load_imres_data <- function(config) {
     schol_data = schol_data,
     p_miles = p_miles,
     s_miles = s_miles,
-    ccc_review = ccc_review_data,  # Add this line
+    ccc_review = ccc_review_data,
+    milestone_descriptions = milestone_descriptions,  # ADD THIS LINE
     url = config$url,
     eval_token = config$eval_token,
     rdm_token = config$rdm_token,
