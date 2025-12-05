@@ -102,9 +102,8 @@ server <- function(input, output, session) {
     updateTextAreaInput(session, "ccc_ilp", value = "")
     updateTextAreaInput(session, "ccc_issues_follow_up", value = "")
     updateTextAreaInput(session, "ccc_comments", value = "")
-    updateTextAreaInput(session, "ccc_mile_concerns", value = "")
-    updateTextAreaInput(session, "ccc_concern_notes", value = "")  # ADD THIS LINE
     updateTextInput(session, "ccc_fu_resp", value = "")
+    # NOTE: ccc_mile_concerns and ccc_concern_notes removed - not in RDM 2.0
     
     # Clear radio buttons
     updateRadioButtons(session, "ccc_rev_type", selected = character(0))
@@ -1670,15 +1669,9 @@ server <- function(input, output, session) {
             tags$strong("Edit Required:"),
             " Please modify the milestone assessments below."
           ),
-          
-          # Comments for edits
-          textAreaInput(
-            "ccc_mile_concerns", 
-            "Comments about milestone changes:",
-            rows = 3,
-            placeholder = "Explain what milestone changes you made and why..."
-          ),
-          
+
+          # NOTE: ccc_mile_concerns field removed - not in RDM 2.0
+
           # Enhanced milestone editing module
           mod_ccc_miles_ui("ccc_miles")
         )
@@ -1714,15 +1707,9 @@ server <- function(input, output, session) {
             tags$strong("Milestone Entry Mode:"),
             " Please assess the relevant milestones below."
           ),
-          
-          # Comments for new entry
-          textAreaInput(
-            "ccc_mile_concerns", 
-            "Comments about milestone assessment:",
-            rows = 3,
-            placeholder = "Explain your milestone assessment rationale..."
-          ),
-          
+
+          # NOTE: ccc_mile_concerns field removed - not in RDM 2.0
+
           # Milestone entry module (same module, different context)
           div(
             class = "milestone-entry-container",
@@ -2172,12 +2159,8 @@ server <- function(input, output, session) {
           ccc_data$ccc_ilp <- input$ccc_ilp
         }
         
-        # Concern notes (when concerns exist) - NEW FIELD
-        if (!is.null(input$ccc_concern) && input$ccc_concern == "1" &&
-            !is.null(input$ccc_concern_notes) && nzchar(trimws(input$ccc_concern_notes))) {
-          ccc_data$ccc_concern_notes <- input$ccc_concern_notes
-        }
-        
+        # NOTE: ccc_concern_notes removed - not in RDM 2.0
+
         # Follow-up actions (only if checkbox is checked)
         if (!is.null(input$has_action_items) && input$has_action_items &&
             !is.null(input$ccc_issues_follow_up) && nzchar(trimws(input$ccc_issues_follow_up))) {
@@ -2216,12 +2199,8 @@ server <- function(input, output, session) {
       # Add interim review specific fields
       if (input$ccc_rev_type == "2") {
         
-        # Concern notes (when concerns exist) - NEW FIELD for interim too
-        if (!is.null(input$ccc_concern) && input$ccc_concern == "1" &&
-            !is.null(input$ccc_concern_notes) && nzchar(trimws(input$ccc_concern_notes))) {
-          ccc_data$ccc_concern_notes <- input$ccc_concern_notes
-        }
-        
+        # NOTE: ccc_concern_notes removed - not in RDM 2.0
+
         # Person responsible
         if (!is.null(input$ccc_fu_resp) && nzchar(trimws(input$ccc_fu_resp))) {
           ccc_data$ccc_fu_resp <- input$ccc_fu_resp

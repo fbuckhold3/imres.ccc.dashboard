@@ -853,21 +853,9 @@ ui <- page_fluid(
                                 icon("edit", class = "fa-lg text-warning me-2"),
                                 h6("Notes on Concern from CCC", class = "text-warning mb-0")
                               ),
-                              div(
-                                class = "row",
-                                div(
-                                  class = "col-12",  # Full width
-                                  textAreaInput(
-                                    "ccc_concern_notes",
-                                    label = NULL,
-                                    rows = 6,
-                                    width = "100%",  # Ensure full width
-                                    placeholder = "Enter detailed notes about the concerns identified by the CCC..."
-                                  )
-                                )
-                              )
+                              # NOTE: ccc_concern_notes removed - not in RDM 2.0
                             ),
-                            
+
                             fluidRow(
                               column(
                                 width = 6,
