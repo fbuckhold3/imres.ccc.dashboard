@@ -5,9 +5,11 @@
 library(shiny)
 
 # Source UI and Server files
+source("R/global.R")
 source("R/ui.R")
 source("R/server.R")
-source("R/global.R")
+
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
