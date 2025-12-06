@@ -125,7 +125,6 @@ library(data.table)
 # Visualization
 library(ggplot2)
 library(gganimate)
-library(ggradar)
 library(DT)
 library(reactable)
 
@@ -143,7 +142,7 @@ library(fontawesome)
 
 ### Custom Package
 ```r
-library(imres)  # Custom package for milestone functions
+library(gmed)  # GMED package with REDCap functions and updated graphs
 ```
 
 ## Configuration

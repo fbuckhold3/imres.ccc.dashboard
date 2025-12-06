@@ -13,7 +13,6 @@ library(ggplot2)
 library(DT)
 library(dplyr)
 library(config)
-library(gmed)  # NEW: RDM 2.0 data loading package
 library(bslib)
 library(httr)
 library(gganimate)
@@ -25,7 +24,6 @@ library(reactable)
 library(htmltools)
 library(data.table)
 library(purrr)
-library(ggradar)
 
 # ---------- SOURCE HELPER FUNCTIONS ----------
 source("R/helpers.R")
