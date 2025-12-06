@@ -1816,37 +1816,6 @@
         "Built": "R 4.3.0; ; 2025-04-10 04:52:28 UTC; unix"
       }
     },
-    "ggradar": {
-      "Source": "github",
-      "Repository": null,
-      "description": {
-        "Package": "ggradar",
-        "Title": "Create radar charts using ggplot2",
-        "Version": "0.2",
-        "Authors@R": "\n    person(given = \"Ricardo\",\n           family = \"Bion\",\n           role = c(\"aut\", \"cre\"),\n           email = \"ricardo.bion@airbnb.com\")",
-        "Description": "This package exports the functionality of ggplot2 to create radar charts.",
-        "License": "GPL",
-        "Imports": "forcats, ggplot2",
-        "Suggests": "testthat (>= 2.1.0)",
-        "Encoding": "UTF-8",
-        "RoxygenNote": "7.1.1",
-        "RemoteType": "github",
-        "RemoteHost": "api.github.com",
-        "RemoteRepo": "ggradar",
-        "RemoteUsername": "ricardo-bion",
-        "RemoteRef": "HEAD",
-        "RemoteSha": "f99517ae4df2903d3dbd4116af91b24009a5ac93",
-        "GithubRepo": "ggradar",
-        "GithubUsername": "ricardo-bion",
-        "GithubRef": "HEAD",
-        "GithubSHA1": "f99517ae4df2903d3dbd4116af91b24009a5ac93",
-        "NeedsCompilation": "no",
-        "Packaged": "2025-05-08 14:01:03 UTC; fredbuckhold",
-        "Author": "Ricardo Bion [aut, cre]",
-        "Maintainer": "Ricardo Bion <ricardo.bion@airbnb.com>",
-        "Built": "R 4.3.3; ; 2025-05-08 14:01:03 UTC; unix"
-      }
-    },
     "gh": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",
@@ -2230,34 +2199,32 @@
         "Built": "R 4.3.0; ; 2025-03-27 04:46:38 UTC; unix"
       }
     },
-    "imres": {
+    "gmed": {
       "Source": "github",
       "Repository": null,
       "description": {
         "Type": "Package",
-        "Package": "imres",
-        "Title": "IM Residency Data Management Support Functions",
+        "Package": "gmed",
+        "Title": "GMED Data Management and Visualization Functions",
         "Version": "0.1.0",
         "Author": "Fred Buckhold",
         "Maintainer": "Fred Buckhold <fred.buckhold@health.slu.edu>",
-        "Description": "This serves as a support package for various shiny apps intending for a residency data management platform. This is initially to be used for the local residency with a conception towards scale. Many functions will be used in various dashboards but in this package form to reduce code complexity with uploading into shiny apps. ",
+        "Description": "GMED package with REDCap helper functions and updated graphs for medical education data management and visualization.",
         "License": "MIT",
-        "Imports": "bslib,\ndevtools,\ndplyr,\nDT,\nhttr,\njsonlite,\nlubridate,\npkgdown,\nhtmltools,\nreactable,\nreadr,\nREDCapR,\nroxygen2,\nshiny,\nstringr,\ntestthat,\ntidyr,\nusethis",
         "Encoding": "UTF-8",
         "LazyData": "true",
         "RoxygenNote": "7.3.2",
-        "Built": "R 4.3.3; ; 2025-04-30 20:18:52 UTC; unix",
         "RemoteType": "github",
         "RemoteHost": "api.github.com",
         "RemoteUsername": "fbuckhold3",
-        "RemoteRepo": "imres",
-        "RemoteRef": "main",
-        "RemoteSha": "722178849552d7409aeb43652152db1b72540c39",
+        "RemoteRepo": "gmed",
+        "RemoteRef": "HEAD",
+        "RemoteSha": "HEAD",
         "GithubHost": "api.github.com",
-        "GithubRepo": "imres",
+        "GithubRepo": "gmed",
         "GithubUsername": "fbuckhold3",
-        "GithubRef": "main",
-        "GithubSHA1": "722178849552d7409aeb43652152db1b72540c39"
+        "GithubRef": "HEAD",
+        "GithubSHA1": "HEAD"
       }
     },
     "ini": {

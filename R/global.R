@@ -7,7 +7,7 @@ library(ggplot2)
 library(DT)
 library(dplyr)
 library(config)
-library(imres)  # Make sure this package is installed
+library(gmed)  # GMED package with REDCap functions and updated graphs
 library(bslib)
 library(httr)
 library(gganimate)
@@ -19,7 +19,6 @@ library(reactable)
 library(htmltools)
 library(data.table)
 library(purrr)
-library(ggradar)
 
 # ---------- SOURCE HELPER FUNCTIONS ----------
 # Uncomment and adjust paths as needed
