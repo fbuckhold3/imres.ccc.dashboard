@@ -36,7 +36,7 @@ stored_access_code <- Sys.getenv("ACCESS_CODE", "default123")
 # ---------- INITIALIZE APP CONFIG ----------
 initialize_app_config <- function() {
   # Set up REDCap API URL for RDM 2.0
-  url <- "https://redcap.wustl.edu/redcap/srvrs/prod_v3_1_0_001/redcap/api/"
+  url <- "https://redcapsurvey.slu.edu/api"
 
   # Debug information
   message("=== Initializing App Config ===")
