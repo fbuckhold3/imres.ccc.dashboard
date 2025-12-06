@@ -1,1 +1,7 @@
 ACCESS_CODE=h7x2q4m9
+
+# RDM 2.0 Token - Add your new RDM 2.0 token here
+RDM_TOKEN=YOUR_RDM2_TOKEN_HERE
+
+# Note: The app will use the new REDCap URL for RDM 2.0:
+# https://redcap.wustl.edu/redcap/srvrs/prod_v3_1_0_001/redcap/api/
