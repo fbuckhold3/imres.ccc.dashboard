@@ -629,7 +629,6 @@ map_period_format <- function(level, period, return_type = "instance", form_cont
   # Look up the mapping
   if (level %in% names(mappings) && period %in% names(mappings[[level]])) {
     result <- mappings[[level]][[period]][[return_type]]
-    message("Found direct mapping for ", level, " + ", period, " -> ", return_type, ": ", result)
     return(result)
   } else {
     # Default case
@@ -883,23 +882,17 @@ get_ccc_session_name <- function(session) {
 
 # Function to map app period to milestone period format - FIXED VERSION
 map_to_milestone_period <- function(level, period, form_context = "milestone") {
-  # Debug
-  message(paste("Mapping period:", period, "for level:", level, "form_context:", form_context))
-  
   # Direct mapping for standard period names - but check for Graduation/Graduating
-  if (period %in% c("Intern Intro", "Mid Intern", "End Intern", 
+  if (period %in% c("Intern Intro", "Mid Intern", "End Intern",
                     "Mid PGY2", "End PGY2", "Mid PGY3", "Graduation", "Graduating")) {
-    
+
     # Handle the Graduation/Graduating inconsistency
     if (period == "Graduation" && form_context %in% c("milestone", "s_eval", "ilp", "coach_rev")) {
-      message(paste("Converting 'Graduation' to 'Graduating' for form context:", form_context))
       return("Graduating")
     } else if (period == "Graduating" && form_context %in% c("ccc_review", "second_review")) {
-      message(paste("Converting 'Graduating' to 'Graduation' for form context:", form_context))
       return("Graduation")
     }
-    
-    message(paste("Using direct mapping for standard period:", period))
+
     return(period)
   }
   
@@ -938,12 +931,10 @@ map_to_milestone_period <- function(level, period, form_context = "milestone") {
   
   if (period %in% names(period_codes_milestone)) {
     mapped_period <- period_codes_milestone[period]
-    message(paste("Mapping numeric code", period, "to", mapped_period, "for form context:", form_context))
     return(mapped_period)
   }
-  
+
   # If we can't map, return NA
-  message(paste("WARNING: Could not map period", period, "for level", level))
   return(NA)
 }
 
