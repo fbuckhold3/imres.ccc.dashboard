@@ -123,6 +123,64 @@ load_imres_data <- function(config) {
   if (!is.null(resident_data) && nrow(resident_data) > 0) {
     message("  -> Detecting current period for each resident...")
 
+    # CRITICAL: Translate grad_yr and type from REDCap codes to actual values
+    if (!is.null(rdm_dict)) {
+      message("  Translating type and grad_yr codes using data dictionary...")
+
+      # Translate type field (1 = Preliminary, 2 = Categorical, etc.)
+      type_choices <- rdm_dict %>%
+        filter(field_name == "type") %>%
+        pull(select_choices_or_calculations)
+
+      if (length(type_choices) > 0 && !is.na(type_choices[1])) {
+        choice_pairs <- strsplit(type_choices[1], "\\|")[[1]]
+        type_map <- list()
+        for (pair in choice_pairs) {
+          parts <- strsplit(trimws(pair), ",", fixed = TRUE)[[1]]
+          if (length(parts) >= 2) {
+            code <- trimws(parts[1])
+            label <- trimws(paste(parts[-1], collapse = ","))
+            type_map[[code]] <- label
+          }
+        }
+        type_map <- unlist(type_map)
+
+        resident_data <- resident_data %>%
+          mutate(
+            type = if_else(!is.na(type) & type %in% names(type_map),
+                          type_map[type], type)
+          )
+        message("    Type field translated: ", paste(head(unique(resident_data$type), 3), collapse = ", "))
+      }
+
+      # Translate grad_yr field (1 = 2025, 2 = 2026, etc.)
+      grad_yr_choices <- rdm_dict %>%
+        filter(field_name == "grad_yr") %>%
+        pull(select_choices_or_calculations)
+
+      if (length(grad_yr_choices) > 0 && !is.na(grad_yr_choices[1])) {
+        choice_pairs <- strsplit(grad_yr_choices[1], "\\|")[[1]]
+        grad_yr_map <- list()
+        for (pair in choice_pairs) {
+          parts <- strsplit(trimws(pair), ",", fixed = TRUE)[[1]]
+          if (length(parts) >= 2) {
+            code <- trimws(parts[1])
+            year <- trimws(paste(parts[-1], collapse = ","))
+            grad_yr_map[[code]] <- year
+          }
+        }
+        grad_yr_map <- unlist(grad_yr_map)
+
+        resident_data <- resident_data %>%
+          mutate(
+            grad_yr = if_else(!is.na(grad_yr) & grad_yr %in% names(grad_yr_map),
+                             grad_yr_map[grad_yr], grad_yr)
+          )
+        message("    Grad_yr field translated: ", paste(head(unique(resident_data$grad_yr), 3), collapse = ", "))
+      }
+    }
+
+    # Now calculate periods with translated values
     resident_data <- resident_data %>%
       rowwise() %>%
       mutate(
@@ -139,6 +197,11 @@ load_imres_data <- function(config) {
               type
             } else {
               NA
+            }
+
+            # Debug first resident
+            if (row_number() == 1) {
+              message("    First resident - grad_yr: ", grad_year, ", type: ", res_type)
             }
 
             # Only calculate if we have required data
@@ -200,7 +263,8 @@ load_imres_data <- function(config) {
       ungroup()
 
     message("  Period detection complete")
-    message("  Sample periods: ", paste(head(unique(resident_data$current_period), 3), collapse = ", "))
+    message("  Sample periods: ", paste(head(unique(resident_data$current_period), 5), collapse = ", "))
+    message("  Period distribution: ", paste(table(resident_data$current_period), collapse = ", "))
   }
 
   # --- Process Milestones (if processing functions are available) ---
