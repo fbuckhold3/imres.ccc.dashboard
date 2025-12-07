@@ -672,12 +672,10 @@ server <- function(input, output, session) {
   
   output$ccc_residents_table <- DT::renderDataTable({
     
-    # Get resident data using your exact working approach
+    # Get resident data (now includes per-resident current_period field)
     resident_data <- processed_resident_data()
-    
-    # Calculate current period using your existing function
-    current_period <- get_current_period()
-    message("Current period: ", current_period)
+
+    message("Resident data loaded with per-resident period calculations")
     
     # Check if we have resident data with the required columns
     if (!is.null(resident_data) && is.data.frame(resident_data) && 
@@ -724,30 +722,33 @@ server <- function(input, output, session) {
         res_access_code <- all_residents$access_code[i]
         res_coach <- all_residents$coach[i]
         res_second_rev <- all_residents$second_rev[i]
-        
+
+        # Get THIS resident's current period (not a global period)
+        res_current_period <- all_residents$current_period[i] %||% "Mid Intern"
+
         # Store the actual data in our vectors
         table_names[i] <- ifelse(is.na(res_name), "", as.character(res_name))
         table_levels[i] <- ifelse(is.na(res_level), "Unknown", as.character(res_level))
         table_access_codes[i] <- ifelse(is.na(res_access_code), "", as.character(res_access_code))
         table_coaches[i] <- ifelse(is.na(res_coach), "Not assigned", as.character(res_coach))
         table_second_revs[i] <- ifelse(is.na(res_second_rev), "Not assigned", as.character(res_second_rev))
-        
-        # Map the period to REDCap format using your existing functions
-        redcap_period <- map_to_milestone_period(res_level, current_period)
-        redcap_periods[i] <- ifelse(is.na(redcap_period), current_period, as.character(redcap_period))
-        
-        # Convert period to REDCap instance
+
+        # Map the resident's period to REDCap format
+        redcap_period <- map_to_milestone_period(res_level, res_current_period)
+        redcap_periods[i] <- ifelse(is.na(redcap_period), res_current_period, as.character(redcap_period))
+
+        # Convert period to REDCap instance for this resident
         coach_period <- map_period_format(
           level = res_level,
-          period = current_period,
+          period = res_current_period,
           return_type = "instance"
         )
-        
-        # Check completion statuses using the fixed functions
+
+        # Check completion statuses using the resident's specific period
         has_self_eval <- check_self_eval_complete_status(resident_data, res_name, redcap_period, app_data())
         has_coach_review <- check_coach_review_complete_status(resident_data, res_name, coach_period)
         has_second_review <- check_second_review_complete_status(resident_data, res_name, coach_period)
-        has_ccc_review <- check_ccc_review_complete_status(resident_data, res_name, redcap_period, res_level, current_period)
+        has_ccc_review <- check_ccc_review_complete_status(resident_data, res_name, redcap_period, res_level, res_current_period)
         
         # Store boolean values for filtering
         has_self_evals[i] <- has_self_eval
@@ -896,24 +897,25 @@ server <- function(input, output, session) {
       
       selected_resident <- resident_data %>%
         filter(name == resident_info$name, access_code == resident_info$access_code) %>%
-        select(name, access_code, year, coach, second_rev, Level) %>%
+        select(name, access_code, year, coach, second_rev, Level, current_period, current_period_num) %>%
         distinct()
-      
+
       message("Found ", nrow(selected_resident), " matching residents")
-      
+
       if (nrow(selected_resident) > 0) {
         # Store selected resident in reactiveValues
         values$selected_resident <- selected_resident[1, ]
-        values$current_period <- resident_info$review_period
-        
+
+        # Use the resident's calculated current_period (not a global period)
+        values$current_period <- values$selected_resident$current_period %||% "Mid Intern"
+
         message("Stored resident: ", values$selected_resident$name)
-        message("Stored period: ", values$current_period)
-        
-        # Map the current period
-        current_app_period <- get_current_period()
+        message("Stored period: ", values$current_period, " (from resident's current_period field)")
+
+        # Map the resident's current period to REDCap format
         values$redcap_period <- map_to_milestone_period(
-          values$selected_resident$Level, 
-          current_app_period
+          values$selected_resident$Level,
+          values$current_period
         )
         
         message("Mapped period: ", values$redcap_period)
@@ -1195,19 +1197,19 @@ server <- function(input, output, session) {
   # Program Milestone Plot (showing current period data)
   output$program_milestones_plot <- renderPlot({
     req(values$selected_resident)
+    req(values$current_period)
     req(values$redcap_period)
-    
+
     data <- app_data()
-    
-    # Use the CURRENT period instead of previous period
-    current_app_period <- get_current_period()
+
+    # Use the resident's current period (from their individual calculation)
     current_mile_period <- map_to_milestone_period(
-      values$selected_resident$Level, 
-      current_app_period,
+      values$selected_resident$Level,
+      values$current_period,
       form_context = "milestone"
     )
     
-    message("Current app period: ", current_app_period)
+    message("Resident's current period: ", values$current_period)
     message("Current milestone period: ", ifelse(is.na(current_mile_period), "NA", current_mile_period))
     
     # Attempt to render if current period exists and should have program data
@@ -1302,15 +1304,14 @@ server <- function(input, output, session) {
     message("Resident: ", values$selected_resident$name)
     message("Period: ", values$redcap_period)
     
-    # Get current period for program milestones
-    current_app_period <- get_current_period()
+    # Get current period for program milestones (from resident's data)
     current_mile_period <- map_to_milestone_period(
-      values$selected_resident$Level, 
-      current_app_period,
+      values$selected_resident$Level,
+      values$current_period,
       form_context = "milestone"
     )
-    
-    message("Current app period: ", current_app_period)
+
+    message("Resident's current period: ", values$current_period)
     message("Current mile period: ", ifelse(is.na(current_mile_period), "NA", current_mile_period))
     
     # Debug the data structure
@@ -1342,11 +1343,10 @@ server <- function(input, output, session) {
     # Get resident data
     resident_data <- processed_resident_data()
     
-    # Get REDCap instance number for the current period
-    current_app_period <- get_current_period()
+    # Get REDCap instance number for the resident's current period
     instance <- map_period_format(
       level = values$selected_resident$Level,
-      period = current_app_period,
+      period = values$current_period,
       return_type = "instance"
     )
     
@@ -1996,9 +1996,8 @@ server <- function(input, output, session) {
           milestone_period <- session_to_period_map[input$ccc_session]
           
         } else {
-          # Fallback: map from current app period
-          current_app_period <- get_current_period()
-          milestone_period <- map_to_milestone_period(values$selected_resident$Level, current_app_period)
+          # Fallback: map from resident's current period
+          milestone_period <- map_to_milestone_period(values$selected_resident$Level, values$current_period)
           
           # Convert back to session number
           period_to_session_map <- c(
