@@ -1531,22 +1531,38 @@ server <- function(input, output, session) {
     existing_data = reactive({
       req(values$selected_resident)
       req(values$redcap_period)
-      
+
       data <- app_data()
-      
-      if (!is.null(data$p_miles)) {
-        existing_milestone_data <- data$p_miles %>%
+
+      # Get resident's record_id from resident_data
+      resident_record_id <- NULL
+      if (!is.null(data$resident_data)) {
+        resident_row <- data$resident_data %>%
+          filter(name == values$selected_resident$name)
+        if (nrow(resident_row) > 0) {
+          resident_record_id <- resident_row$record_id[1]
+        }
+      }
+
+      if (is.null(resident_record_id)) {
+        message("Could not find record_id for resident: ", values$selected_resident$name)
+        return(NULL)
+      }
+
+      # Filter milestone_entry data (previously p_miles) by record_id and period
+      if (!is.null(data$milestone_entry)) {
+        existing_milestone_data <- data$milestone_entry %>%
           filter(
-            name == values$selected_resident$name,
-            period == values$redcap_period
+            record_id == resident_record_id,
+            prog_mile_period == values$redcap_period
           )
-        
+
         if (nrow(existing_milestone_data) > 0) {
           message("Loading existing milestone data for CCC editing")
           return(existing_milestone_data[1, ])
         }
       }
-      
+
       message("No existing milestone data found")
       return(NULL)
     })

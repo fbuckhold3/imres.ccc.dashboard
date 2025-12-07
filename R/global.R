@@ -110,6 +110,9 @@ load_imres_data <- function(config) {
   milestone_self_data <- all_forms$milestone_selfevaluation_c33c %||% NULL
   message("Self milestone data: ", if(is.null(milestone_self_data)) "NULL" else paste(nrow(milestone_self_data), "entries"))
 
+  acgme_miles_data <- all_forms$acgme_miles %||% NULL
+  message("ACGME milestone data: ", if(is.null(acgme_miles_data)) "NULL" else paste(nrow(acgme_miles_data), "entries"))
+
   ilp_data <- all_forms$ilp %||% NULL
   message("ILP data: ", if(is.null(ilp_data)) "NULL" else paste(nrow(ilp_data), "entries"))
 
@@ -298,7 +301,12 @@ load_imres_data <- function(config) {
     # CCC review data
     ccc_review = ccc_review_data,
 
-    # Milestone data
+    # Milestone data (raw forms from gmed)
+    milestone_entry = milestone_entry_data,           # Program milestone entries
+    milestone_selfevaluation_c33c = milestone_self_data,  # Self-evaluation milestones
+    acgme_miles = acgme_miles_data,                   # ACGME milestones
+
+    # Legacy milestone data (for backward compatibility)
     miles = milestone_entry_data,  # Raw milestone data
     p_miles = p_miles,             # Processed program milestones
     s_miles = s_miles,             # Processed self milestones
