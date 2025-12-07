@@ -20,16 +20,9 @@ server <- function(input, output, session) {
     current_filter = "all"  # For CCC filtering
   )
   
-  # Show loading notification
-  showNotification("Loading data... please wait", type = "message", duration = NULL, id = "loading")
-  
   # Load app data reactively
   app_data <- reactive({
     data <- ensure_data_loaded()
-    
-    # Remove loading notification once data is loaded
-    removeNotification("loading")
-    
     return(data)
   })
   
@@ -537,7 +530,7 @@ server <- function(input, output, session) {
   }
   
   # Check CCC review completeness
-  check_ccc_review_complete_status <- function(resident_data, resident_name, period, level, current_period) {
+  check_ccc_review_complete_status <- function(ccc_review_data, resident_name, period, level, current_period) {
     # Map period to CCC session number with better handling
     ccc_session_map <- c(
       "Mid Intern" = "1",
@@ -569,21 +562,25 @@ server <- function(input, output, session) {
         return(FALSE)
       }
     }
-    
+
     # Filter for this resident
-    resident_rows <- resident_data[resident_data$name == resident_name, ]
-    
-    if (nrow(resident_rows) == 0) {
+    if (is.null(ccc_review_data)) {
       return(FALSE)
     }
-    
+
+    resident_ccc_reviews <- ccc_review_data[ccc_review_data$name == resident_name, ]
+
+    if (nrow(resident_ccc_reviews) == 0) {
+      return(FALSE)
+    }
+
     # Check for CCC review data with the required criteria
     # Method 1: Strict check - ccc_rev_type = "1" (Scheduled), ccc_session matches, ccc_mile = "1" (Yes)
-    if (all(c("ccc_rev_type", "ccc_session", "ccc_mile") %in% names(resident_rows))) {
-      ccc_complete_rows <- resident_rows[
-        !is.na(resident_rows$ccc_rev_type) & resident_rows$ccc_rev_type == "1" &
-          !is.na(resident_rows$ccc_session) & resident_rows$ccc_session == expected_session &
-          !is.na(resident_rows$ccc_mile) & resident_rows$ccc_mile == "1", ]
+    if (all(c("ccc_rev_type", "ccc_session", "ccc_mile") %in% names(resident_ccc_reviews))) {
+      ccc_complete_rows <- resident_ccc_reviews[
+        !is.na(resident_ccc_reviews$ccc_rev_type) & resident_ccc_reviews$ccc_rev_type == "1" &
+          !is.na(resident_ccc_reviews$ccc_session) & resident_ccc_reviews$ccc_session == expected_session &
+          !is.na(resident_ccc_reviews$ccc_mile) & resident_ccc_reviews$ccc_mile == "1", ]
       
       if (nrow(ccc_complete_rows) > 0) {
         return(TRUE)
@@ -591,15 +588,15 @@ server <- function(input, output, session) {
     }
     
     # Method 2: Looser check - any CCC content for the expected session
-    if ("ccc_session" %in% names(resident_rows)) {
-      session_rows <- resident_rows[!is.na(resident_rows$ccc_session) & 
-                                      resident_rows$ccc_session == expected_session, ]
-      
+    if ("ccc_session" %in% names(resident_ccc_reviews)) {
+      session_rows <- resident_ccc_reviews[!is.na(resident_ccc_reviews$ccc_session) &
+                                      resident_ccc_reviews$ccc_session == expected_session, ]
+
       if (nrow(session_rows) > 0) {
         # Check if there's any meaningful content
         content_fields <- c("ccc_date", "ccc_comments", "ccc_ilp", "ccc_mile_notes", "ccc_issues_follow_up")
         existing_content_fields <- intersect(content_fields, names(session_rows))
-        
+
         for (field in existing_content_fields) {
           content_rows <- session_rows[!is.na(session_rows[[field]]) & session_rows[[field]] != "", ]
           if (nrow(content_rows) > 0) {
@@ -608,16 +605,16 @@ server <- function(input, output, session) {
         }
       }
     }
-    
+
     # Method 3: Any CCC review content at all (fallback)
-    ccc_fields <- c("ccc_date", "ccc_rev_type", "ccc_session", "ccc_interim", "ccc_concern", 
-                    "ccc_action", "ccc_competency", "ccc_ilp", "ccc_mile", "ccc_mile_notes", 
+    ccc_fields <- c("ccc_date", "ccc_rev_type", "ccc_session", "ccc_interim", "ccc_concern",
+                    "ccc_action", "ccc_competency", "ccc_ilp", "ccc_mile", "ccc_mile_notes",
                     "ccc_issues_follow_up", "ccc_comments")
-    
-    existing_ccc_fields <- intersect(ccc_fields, names(resident_rows))
-    
+
+    existing_ccc_fields <- intersect(ccc_fields, names(resident_ccc_reviews))
+
     for (field in existing_ccc_fields) {
-      content_rows <- resident_rows[!is.na(resident_rows[[field]]) & resident_rows[[field]] != "", ]
+      content_rows <- resident_ccc_reviews[!is.na(resident_ccc_reviews[[field]]) & resident_ccc_reviews[[field]] != "", ]
       if (nrow(content_rows) > 0) {
         return(TRUE)
       }
@@ -748,7 +745,7 @@ server <- function(input, output, session) {
         has_self_eval <- check_self_eval_complete_status(resident_data, res_name, redcap_period, app_data())
         has_coach_review <- check_coach_review_complete_status(resident_data, res_name, coach_period)
         has_second_review <- check_second_review_complete_status(resident_data, res_name, coach_period)
-        has_ccc_review <- check_ccc_review_complete_status(resident_data, res_name, redcap_period, res_level, res_current_period)
+        has_ccc_review <- check_ccc_review_complete_status(app_data()$ccc_review, res_name, redcap_period, res_level, res_current_period)
         
         # Store boolean values for filtering
         has_self_evals[i] <- has_self_eval
@@ -897,7 +894,7 @@ server <- function(input, output, session) {
       
       selected_resident <- resident_data %>%
         filter(name == resident_info$name, access_code == resident_info$access_code) %>%
-        select(name, access_code, year, coach, second_rev, Level, current_period, current_period_num) %>%
+        select(name, access_code, coach, second_rev, Level, current_period, current_period_num) %>%
         distinct()
 
       message("Found ", nrow(selected_resident), " matching residents")

@@ -121,11 +121,8 @@ load_imres_data <- function(config) {
 
   # === AUTO-DETECT PERIOD FOR EACH RESIDENT ===
   if (!is.null(resident_data) && nrow(resident_data) > 0) {
-    message("  -> Detecting current period for each resident...")
-
     # CRITICAL: Translate grad_yr and type from REDCap codes to actual values
     if (!is.null(rdm_dict)) {
-      message("  Translating type and grad_yr codes using data dictionary...")
 
       # Translate type field (1 = Preliminary, 2 = Categorical, etc.)
       type_choices <- rdm_dict %>%
@@ -150,7 +147,6 @@ load_imres_data <- function(config) {
             type = if_else(!is.na(type) & type %in% names(type_map),
                           type_map[type], type)
           )
-        message("    Type field translated: ", paste(head(unique(resident_data$type), 3), collapse = ", "))
       }
 
       # Translate grad_yr field (1 = 2025, 2 = 2026, etc.)
@@ -176,7 +172,6 @@ load_imres_data <- function(config) {
             grad_yr = if_else(!is.na(grad_yr) & grad_yr %in% names(grad_yr_map),
                              grad_yr_map[grad_yr], grad_yr)
           )
-        message("    Grad_yr field translated: ", paste(head(unique(resident_data$grad_yr), 3), collapse = ", "))
       }
     }
 
@@ -197,11 +192,6 @@ load_imres_data <- function(config) {
               type
             } else {
               NA
-            }
-
-            # Debug first resident
-            if (row_number() == 1) {
-              message("    First resident - grad_yr: ", grad_year, ", type: ", res_type)
             }
 
             # Only calculate if we have required data
@@ -262,9 +252,8 @@ load_imres_data <- function(config) {
       ) %>%
       ungroup()
 
-    message("  Period detection complete")
-    message("  Sample periods: ", paste(head(unique(resident_data$current_period), 5), collapse = ", "))
-    message("  Period distribution: ", paste(table(resident_data$current_period), collapse = ", "))
+    # Add Level column based on grad_yr and type using helper function
+    resident_data <- calculate_resident_level(resident_data)
   }
 
   # --- Process Milestones (if processing functions are available) ---
