@@ -15,9 +15,11 @@ server <- function(input, output, session) {
     current_period = NULL,
     redcap_period = NULL,
     redcap_prev_period = NULL,
-    tab_order = c("pre_review", "wellness", "evaluations", "knowledge", 
+    tab_order = c("pre_review", "wellness", "evaluations", "knowledge",
                   "scholarship", "ilp", "career", "summary", "milestones"),
-    current_filter = "all"  # For CCC filtering
+    current_filter = "all",  # For CCC filtering
+    selected_second_reviewer = NULL,  # For second reviewer filtering
+    selected_pgy_year = NULL  # For PGY year filtering
   )
   
   # Show loading notification
@@ -627,9 +629,34 @@ server <- function(input, output, session) {
   }
   
   # ============================================================================
+  # POPULATE DROPDOWN FILTERS
+  # ============================================================================
+
+  # Populate coach and second reviewer dropdowns
+  observe({
+    resident_data <- processed_resident_data()
+
+    if (!is.null(resident_data) && is.data.frame(resident_data)) {
+      # Get unique coaches and second reviewers
+      unique_coaches <- sort(unique(resident_data$coach[!is.na(resident_data$coach) & resident_data$coach != ""]))
+      unique_second_revs <- sort(unique(resident_data$second_rev[!is.na(resident_data$second_rev) & resident_data$second_rev != ""]))
+
+      # Update coach dropdown
+      updateSelectInput(session, "filter_by_coach",
+                        choices = c("All" = "All", setNames(unique_coaches, unique_coaches)),
+                        selected = if (!is.null(values$selected_coach)) values$selected_coach else "All")
+
+      # Update second reviewer dropdown
+      updateSelectInput(session, "filter_by_second_reviewer",
+                        choices = c("All" = "All", setNames(unique_second_revs, unique_second_revs)),
+                        selected = if (!is.null(values$selected_second_reviewer)) values$selected_second_reviewer else "All")
+    }
+  })
+
+  # ============================================================================
   # FILTER BUTTON OBSERVERS
   # ============================================================================
-  
+
   # Filter by Level
   observeEvent(input$filter_by_level, {
     values$current_filter <- "level"
@@ -648,21 +675,78 @@ server <- function(input, output, session) {
     showNotification("Showing residents with self-eval done but coach/second reviews pending", type = "message")
   })
   
-  # Filter by Coach Done, Second Pending
-  observeEvent(input$filter_coach_done_second_pending, {
-    values$current_filter <- "coach_done_second_pending"
-    showNotification("Showing residents with coach review done but second review pending", type = "message")
+  # Filter by Coach Done (regardless of second review status)
+  observeEvent(input$filter_coach_done, {
+    values$current_filter <- "coach_done"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    showNotification("Showing residents with coach review done", type = "message")
   })
-  
-  # Filter by Coach/Second Done, CCC Pending
-  observeEvent(input$filter_reviews_done_ccc_pending, {
-    values$current_filter <- "reviews_done_ccc_pending"
-    showNotification("Showing residents with both reviews done but CCC review pending", type = "message")
+
+  # Filter by Coach AND Second Review Done (regardless of other statuses)
+  observeEvent(input$filter_coach_and_second_done, {
+    values$current_filter <- "coach_and_second_done"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    showNotification("Showing residents with both coach and second review done", type = "message")
   })
-  
+
+  # Filter by Intern
+  observeEvent(input$filter_intern, {
+    values$current_filter <- "pgy_year"
+    values$selected_pgy_year <- "Intern"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    showNotification("Showing Interns only", type = "message")
+  })
+
+  # Filter by PGY2
+  observeEvent(input$filter_pgy2, {
+    values$current_filter <- "pgy_year"
+    values$selected_pgy_year <- "PGY2"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    showNotification("Showing PGY2 residents only", type = "message")
+  })
+
+  # Filter by PGY3
+  observeEvent(input$filter_pgy3, {
+    values$current_filter <- "pgy_year"
+    values$selected_pgy_year <- "PGY3"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    showNotification("Showing PGY3 residents only", type = "message")
+  })
+
+  # Filter by Coach dropdown
+  observeEvent(input$filter_by_coach, {
+    if (!is.null(input$filter_by_coach) && input$filter_by_coach != "All") {
+      values$current_filter <- "by_coach"
+      values$selected_coach <- input$filter_by_coach
+      values$selected_second_reviewer <- NULL
+      showNotification(paste("Showing residents coached by", input$filter_by_coach), type = "message")
+    }
+  })
+
+  # Filter by Second Reviewer dropdown
+  observeEvent(input$filter_by_second_reviewer, {
+    if (!is.null(input$filter_by_second_reviewer) && input$filter_by_second_reviewer != "All") {
+      values$current_filter <- "by_second_reviewer"
+      values$selected_second_reviewer <- input$filter_by_second_reviewer
+      values$selected_coach <- NULL
+      showNotification(paste("Showing residents reviewed by", input$filter_by_second_reviewer), type = "message")
+    }
+  })
+
   # Clear all filters
   observeEvent(input$clear_filters, {
     values$current_filter <- "all"
+    values$selected_coach <- NULL
+    values$selected_second_reviewer <- NULL
+    values$selected_pgy_year <- NULL
+    # Reset dropdowns
+    updateSelectInput(session, "filter_by_coach", selected = "All")
+    updateSelectInput(session, "filter_by_second_reviewer", selected = "All")
     showNotification("All filters cleared", type = "message")
   })
   
@@ -793,11 +877,35 @@ server <- function(input, output, session) {
       filter_indices <- switch(values$current_filter,
                                "all" = 1:nrow(final_residents_table),
                                # For level sorting, just return all indices (we'll sort differently)
-                               "level" = 1:nrow(final_residents_table),  
+                               "level" = 1:nrow(final_residents_table),
                                "fully_complete" = which(has_self_evals & has_coach_reviews & has_second_reviews & has_ccc_reviews),
                                "self_done_others_pending" = which(has_self_evals & (!has_coach_reviews | !has_second_reviews)),
                                "coach_done_second_pending" = which(has_coach_reviews & !has_second_reviews),
                                "reviews_done_ccc_pending" = which(has_coach_reviews & has_second_reviews & !has_ccc_reviews),
+                               # New filters
+                               "coach_done" = which(has_coach_reviews),
+                               "coach_and_second_done" = which(has_coach_reviews & has_second_reviews),
+                               "pgy_year" = {
+                                 if (!is.null(values$selected_pgy_year)) {
+                                   which(table_levels == values$selected_pgy_year)
+                                 } else {
+                                   1:nrow(final_residents_table)
+                                 }
+                               },
+                               "by_coach" = {
+                                 if (!is.null(values$selected_coach)) {
+                                   which(table_coaches == values$selected_coach)
+                                 } else {
+                                   1:nrow(final_residents_table)
+                                 }
+                               },
+                               "by_second_reviewer" = {
+                                 if (!is.null(values$selected_second_reviewer)) {
+                                   which(table_second_revs == values$selected_second_reviewer)
+                                 } else {
+                                   1:nrow(final_residents_table)
+                                 }
+                               },
                                1:nrow(final_residents_table)  # Default to all
       )
       
@@ -827,6 +935,12 @@ server <- function(input, output, session) {
                              "self_done_others_pending" = paste0("Self-Eval Done, Others Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
                              "coach_done_second_pending" = paste0("Coach Done, Second Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
                              "reviews_done_ccc_pending" = paste0("Reviews Done, CCC Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
+                             # New filter captions
+                             "coach_done" = paste0("Coach Review Done (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
+                             "coach_and_second_done" = paste0("Coach & Second Review Done (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
+                             "pgy_year" = paste0(values$selected_pgy_year, " Residents (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
+                             "by_coach" = paste0("Residents coached by ", values$selected_coach, " (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
+                             "by_second_reviewer" = paste0("Residents reviewed by ", values$selected_second_reviewer, " (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
                              "All Residents - CCC Review Status"
       )
       

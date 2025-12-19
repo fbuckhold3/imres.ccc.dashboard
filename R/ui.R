@@ -291,27 +291,81 @@ ui <- page_fluid(
                   h5("Quick Filters", class = "text-primary fw-bold")
                 ),
                 
-                # Enhanced filter buttons - larger and solid
+                # Completion Status Filters
                 div(
-                  class = "d-flex flex-wrap justify-content-center gap-3 mb-4",
-                  actionButton("filter_by_level", 
-                               "Sort by Level", 
-                               class = "btn-primary btn-lg px-4 py-2"),
-                  actionButton("filter_fully_complete", 
-                               "Fully Complete", 
-                               class = "btn-success btn-lg px-4 py-2"),
-                  actionButton("filter_self_done_others_pending", 
-                               "Self-Eval Done", 
-                               class = "btn-warning btn-lg px-4 py-2"),
-                  actionButton("filter_coach_done_second_pending", 
-                               "Coach Done", 
-                               class = "btn-info btn-lg px-4 py-2"),
-                  actionButton("filter_reviews_done_ccc_pending", 
-                               "Reviews Done", 
-                               class = "btn-secondary btn-lg px-4 py-2"),
-                  actionButton("clear_filters", 
-                               "Clear Filters", 
-                               class = "btn-danger btn-lg px-4 py-2")
+                  class = "mb-3",
+                  h6("Completion Status", class = "text-muted mb-2"),
+                  div(
+                    class = "d-flex flex-wrap justify-content-center gap-2",
+                    actionButton("filter_coach_done",
+                                 "Coach Done",
+                                 class = "btn-info btn-lg px-4 py-2"),
+                    actionButton("filter_coach_and_second_done",
+                                 "Coach & Second Done",
+                                 class = "btn-primary btn-lg px-4 py-2"),
+                    actionButton("filter_fully_complete",
+                                 "All Done",
+                                 class = "btn-success btn-lg px-4 py-2")
+                  )
+                ),
+
+                # PGY Year Filters
+                div(
+                  class = "mb-3",
+                  h6("Filter by PGY Year", class = "text-muted mb-2"),
+                  div(
+                    class = "d-flex flex-wrap justify-content-center gap-2",
+                    actionButton("filter_intern",
+                                 "Intern",
+                                 class = "btn-outline-primary btn-lg px-4 py-2"),
+                    actionButton("filter_pgy2",
+                                 "PGY2",
+                                 class = "btn-outline-primary btn-lg px-4 py-2"),
+                    actionButton("filter_pgy3",
+                                 "PGY3",
+                                 class = "btn-outline-primary btn-lg px-4 py-2")
+                  )
+                ),
+
+                # Dropdown Filters for Coach and Second Reviewer
+                div(
+                  class = "mb-3",
+                  h6("Filter by Reviewer", class = "text-muted mb-2"),
+                  div(
+                    class = "d-flex flex-wrap justify-content-center gap-3",
+                    div(
+                      class = "col-md-4",
+                      selectInput("filter_by_coach",
+                                  "Filter by Coach:",
+                                  choices = NULL,
+                                  width = "100%")
+                    ),
+                    div(
+                      class = "col-md-4",
+                      selectInput("filter_by_second_reviewer",
+                                  "Filter by Second Reviewer:",
+                                  choices = NULL,
+                                  width = "100%")
+                    )
+                  )
+                ),
+
+                # Other Filters and Clear
+                div(
+                  class = "mb-2",
+                  h6("Other Filters", class = "text-muted mb-2"),
+                  div(
+                    class = "d-flex flex-wrap justify-content-center gap-2",
+                    actionButton("filter_by_level",
+                                 "Sort by Level",
+                                 class = "btn-secondary btn-lg px-4 py-2"),
+                    actionButton("filter_self_done_others_pending",
+                                 "Self-Eval Done",
+                                 class = "btn-warning btn-lg px-4 py-2"),
+                    actionButton("clear_filters",
+                                 "Clear Filters",
+                                 class = "btn-danger btn-lg px-4 py-2")
+                  )
                 ),
                 
                 # Help text
