@@ -1921,7 +1921,7 @@ check_milestones_exist <- function(milestone_data, resident_name, period) {
   # Look for key milestone fields
   milestone_fields <- c("rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
                         "rep_mk1", "rep_mk2", "rep_mk3", "rep_sbp1", "rep_sbp2", "rep_sbp3",
-                        "rep_pbl1", "rep_pbl2", "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
+                        "rep_pbli1", "rep_pbli2", "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
                         "rep_ics1", "rep_ics2", "rep_ics3")
   
   # Check which milestone fields exist in the data
@@ -2038,11 +2038,11 @@ create_milestone_description_table <- function(resident_name, period, source_typ
     ),
     "PBLI1: Evidence-Based and Informed Practice" = list(
       score = "PBL1",
-      desc = if (source_type == "self") "rep_pbl1_self_desc" else "rep_pbl1_desc"
+      desc = if (source_type == "self") "rep_pbli1_self_desc" else "rep_pbli1_desc"
     ),
     "PBLI2: Reflective Practice and Commitment to Personal Growth" = list(
       score = "PBL2",
-      desc = if (source_type == "self") "rep_pbl2_self_desc" else "rep_pbl2_desc"
+      desc = if (source_type == "self") "rep_pbli2_self_desc" else "rep_pbli2_desc"
     ),
     "PROF1: Professional Behavior" = list(
       score = "PROF1",

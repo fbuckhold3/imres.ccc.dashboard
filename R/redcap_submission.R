@@ -297,7 +297,7 @@ submit_milestone_data <- function(redcap_url, redcap_token, record_id, selected_
           all_milestone_fields <- c(
             "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
             "rep_mk1", "rep_mk2", "rep_mk3", "rep_sbp1", "rep_sbp2", "rep_sbp3",
-            "rep_pbl1", "rep_pbl2", "rep_prof1", "rep_prof2", "rep_prof3", 
+            "rep_pbli1", "rep_pbli2", "rep_prof1", "rep_prof2", "rep_prof3",
             "rep_prof4", "rep_ics1", "rep_ics2", "rep_ics3"
           )
           

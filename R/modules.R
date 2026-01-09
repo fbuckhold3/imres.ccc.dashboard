@@ -22,10 +22,10 @@ MILESTONE_DEFINITIONS <- list(
     title = "Systems-Based Practice & Practice-Based Learning",
     items = c(
       "rep_sbp1" = "SBP1: Patient Safety and Quality Improvement",
-      "rep_sbp2" = "SBP2: System Navigation for Patient-Centered Care", 
+      "rep_sbp2" = "SBP2: System Navigation for Patient-Centered Care",
       "rep_sbp3" = "SBP3: Physician Role in Health Care Systems",
-      "rep_pbl1" = "PBLI1: Evidence-Based and Informed Practice",
-      "rep_pbl2" = "PBLI2: Reflective Practice and Commitment to Personal Growth"
+      "rep_pbli1" = "PBLI1: Evidence-Based and Informed Practice",
+      "rep_pbli2" = "PBLI2: Reflective Practice and Commitment to Personal Growth"
     )
   ),
   prof_ics = list(
@@ -104,7 +104,6 @@ show_milestone_info <- function(milestone_key, milestone_name) {
   
   # Map milestone field names to image filenames
   image_filename <- gsub("^rep_", "", milestone_key)  # Remove 'rep_' prefix
-  image_filename <- gsub("^pbl", "pbli", image_filename)  # Handle pbl -> pbli
   image_filename <- trimws(image_filename)  # Remove whitespace
   image_filename <- gsub("\\s+", "", image_filename)  # Remove internal spaces
   
@@ -188,7 +187,7 @@ check_milestone_images <- function() {
     "rep_pc1", "rep_pc2", "rep_pc3", "rep_pc4", "rep_pc5", "rep_pc6",
     "rep_mk1", "rep_mk2", "rep_mk3",
     "rep_sbp1", "rep_sbp2", "rep_sbp3",
-    "rep_pbl1", "rep_pbl2",
+    "rep_pbli1", "rep_pbli2",
     "rep_prof1", "rep_prof2", "rep_prof3", "rep_prof4",
     "rep_ics1", "rep_ics2", "rep_ics3"
   )
@@ -210,7 +209,6 @@ check_milestone_images <- function() {
     for (key in milestone_keys) {
       # Apply same mapping logic as show_milestone_info
       image_filename <- gsub("^rep_", "", key)
-      image_filename <- gsub("^pbl", "pbli", image_filename)
       
       local_path <- file.path("www", "milestones", paste0(image_filename, ".png"))
       
@@ -235,7 +233,6 @@ check_milestone_images <- function() {
     found_images <- 0
     missing_images <- sapply(milestone_keys, function(key) {
       image_filename <- gsub("^rep_", "", key)
-      image_filename <- gsub("^pbl", "pbli", image_filename)
       paste0(image_filename, ".png")
     })
   }
@@ -354,12 +351,12 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
     map_old_to_new_fields <- function(old_data) {
       # Mapping from old field names to new field names
       field_mapping <- c(
-        "PC1" = "rep_pc1", "PC2" = "rep_pc2", "PC3" = "rep_pc3", 
+        "PC1" = "rep_pc1", "PC2" = "rep_pc2", "PC3" = "rep_pc3",
         "PC4" = "rep_pc4", "PC5" = "rep_pc5", "PC6" = "rep_pc6",
         "MK1" = "rep_mk1", "MK2" = "rep_mk2", "MK3" = "rep_mk3",
         "SBP1" = "rep_sbp1", "SBP2" = "rep_sbp2", "SBP3" = "rep_sbp3",
-        "PBL1" = "rep_pbl1", "PBL2" = "rep_pbl2",
-        "PROF1" = "rep_prof1", "PROF2" = "rep_prof2", 
+        "PBL1" = "rep_pbli1", "PBL2" = "rep_pbli2",
+        "PROF1" = "rep_prof1", "PROF2" = "rep_prof2",
         "PROF3" = "rep_prof3", "PROF4" = "rep_prof4",
         "ICS1" = "rep_ics1", "ICS2" = "rep_ics2", "ICS3" = "rep_ics3"
       )
