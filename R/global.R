@@ -20,6 +20,7 @@ library(htmltools)
 library(data.table)
 library(purrr)
 library(ggradar)
+library(gmed)
 
 # ---------- SOURCE HELPER FUNCTIONS ----------
 # Uncomment and adjust paths as needed
@@ -354,23 +355,38 @@ load_imres_data <- function(config) {
     NULL
   })
   
-  # --- Get resident data ---
-  resident_data <- tryCatch({
-    message("Attempting to pull assessment data...")
-    ass_dat <- full_api_pull(config$eval_token, config$url)
-    message("Successfully pulled assessment data")
-    
-    message("Wrangling assessment data...")
-    ass_dat <- wrangle_assessment_data(ass_dat)
-    message("Assessment data wrangled")
-    
-    message("Creating resident data...")
-    result <- create_res_data(ass_dat, rdm_dat)
-    message("Resident data created with ", nrow(result), " rows")
-    
+  # --- Pull raw assessment data (before wrangling, for eval/plus-delta modules) ---
+  raw_eval_data <- tryCatch({
+    message("Pulling raw assessment data for eval modules...")
+    result <- full_api_pull(config$eval_token, config$url)
+    # Ensure the data has a redcap_repeat_instrument column for gmed module compatibility
+    if (is.data.frame(result) && !"redcap_repeat_instrument" %in% names(result)) {
+      result$redcap_repeat_instrument <- "Assessment"
+    }
+    message("Raw eval data pulled: ", if (is.data.frame(result)) nrow(result) else "not a df", " rows")
     result
   }, error = function(e) {
-    message("Error in resident data API pull: ", e$message)
+    message("Error pulling raw eval data: ", e$message)
+    NULL
+  })
+
+  # --- Get resident data ---
+  resident_data <- tryCatch({
+    message("Attempting to create resident data from raw eval data...")
+    if (!is.null(raw_eval_data)) {
+      ass_dat <- wrangle_assessment_data(raw_eval_data)
+      message("Assessment data wrangled")
+      result <- create_res_data(ass_dat, rdm_dat)
+      message("Resident data created with ", nrow(result), " rows")
+      result
+    } else {
+      message("No raw eval data available, attempting direct pull...")
+      ass_dat <- full_api_pull(config$eval_token, config$url)
+      ass_dat <- wrangle_assessment_data(ass_dat)
+      create_res_data(ass_dat, rdm_dat)
+    }
+  }, error = function(e) {
+    message("Error in resident data creation: ", e$message)
     NULL
   })
   
@@ -763,6 +779,8 @@ load_imres_data <- function(config) {
     rdm_dict = rdm_dict,
     ass_dict = ass_dict,
     resident_data = resident_data,
+    raw_eval_data = raw_eval_data,               # Raw assessment data for eval/plus-delta modules
+    raw_rdm_data = if (is.data.frame(rdm_dat)) rdm_dat else NULL,  # Flat RDM data if available
     miles = miles,
     ilp = ilp_data,
     s_eval = s_eval_data,

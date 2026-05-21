@@ -626,7 +626,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
     
     # Return reactive values for parent to access
     return(list(
-      scores = reactive({ 
+      scores = reactive({
         # Only return scores for selected milestones
         selected_scores <- list()
         all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
@@ -637,6 +637,7 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
         }
         selected_scores
       }),
+      all_scores = reactive({ values$scores }),  # All current scores, including unselected
       selected_milestones = reactive({ values$selected_milestones }),
       has_changes = reactive({
         all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
@@ -648,6 +649,22 @@ mod_ccc_miles_server <- function(id, existing_data = NULL) {
           }
         }
         return(FALSE)
+      }),
+      changed_milestones = reactive({
+        all_milestone_keys <- unlist(lapply(milestones, function(x) names(x$items)))
+        changes <- list()
+        for (key in all_milestone_keys) {
+          if (values$selected_milestones[[key]]) {
+            original <- values$original_scores[[key]] %||% 0
+            current <- values$scores[[key]] %||% 0
+            if (original != current) {
+              changes[[key]] <- list(from = original, to = current,
+                                     from_level = get_level_name(original),
+                                     to_level = get_level_name(current))
+            }
+          }
+        }
+        changes
       })
     ))
   })

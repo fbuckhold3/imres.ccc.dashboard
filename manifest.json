@@ -1847,6 +1847,32 @@
         "Built": "R 4.3.3; ; 2025-05-08 14:01:03 UTC; unix"
       }
     },
+    "gmed": {
+      "Source": "github",
+      "Repository": null,
+      "description": {
+        "Type": "Package",
+        "Package": "gmed",
+        "Title": "What the Package Does (One Line, Title Case)",
+        "Version": "0.0.1",
+        "Description": "What the package does (one paragraph).",
+        "License": "MIT + file LICENSE",
+        "Encoding": "UTF-8",
+        "RoxygenNote": "7.3.2",
+        "Imports": "dplyr, httr, readr, jsonlite, DT, reactable, htmltools, plotly, rlang, config, lubridate, tidyr, shinyjs, shiny, bslib, data.table, tibble, purrr",
+        "RemoteType": "github",
+        "RemoteHost": "api.github.com",
+        "RemoteUsername": "fbuckhold3",
+        "RemoteRepo": "gmed",
+        "RemoteRef": "main",
+        "RemoteSha": "2c0f20a72bfd1f1d7b5693a57cee0b00b3bb3efd",
+        "GithubHost": "api.github.com",
+        "GithubRepo": "gmed",
+        "GithubUsername": "fbuckhold3",
+        "GithubRef": "main",
+        "GithubSHA1": "2c0f20a72bfd1f1d7b5693a57cee0b00b3bb3efd"
+      }
+    },
     "gh": {
       "Source": "CRAN",
       "Repository": "https://packagemanager.posit.co/cran/latest",

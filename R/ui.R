@@ -760,6 +760,18 @@ ui <- page_fluid(
                         `data-card-type` = "scheduled-step2"
                       ),
                       card_body(
+                        # Previous CCC ILP Note
+                        div(
+                          class = "prev-ccc-section mb-4 p-3",
+                          style = "background: linear-gradient(135deg, #fff8e1 0%, #ffecb3 100%); border-radius: 12px; border-left: 5px solid #ffc107;",
+                          div(
+                            class = "d-flex align-items-center mb-2",
+                            icon("history", class = "fa-lg text-warning me-2"),
+                            h6("Previous CCC ILP Note", class = "text-warning mb-0 fw-bold")
+                          ),
+                          uiOutput("prev_ccc_ilp_note")
+                        ),
+
                         # Enhanced Coach ILP Summary
                         div(
                           class = "ilp-summary-section mb-4 p-4",
@@ -790,6 +802,69 @@ ui <- page_fluid(
                           )
                         ),
                         
+                        # ── EVALUATIONS TABLE (collapsible) ───────────────────
+                        div(
+                          class = "mb-4",
+                          # Prominent header button
+                          tags$button(
+                            class = "btn btn-outline-primary btn-lg w-100 d-flex align-items-center justify-content-between",
+                            type = "button",
+                            `data-bs-toggle` = "collapse",
+                            `data-bs-target` = "#evalTableCollapse",
+                            `aria-expanded` = "false",
+                            style = "border-radius: 10px; font-weight: 600;",
+                            div(
+                              class = "d-flex align-items-center",
+                              icon("clipboard-list", class = "fa-lg me-2"),
+                              span("Faculty Evaluations", class = "fs-5")
+                            ),
+                            div(
+                              tags$small("Click to expand", class = "text-muted me-2"),
+                              icon("chevron-down")
+                            )
+                          ),
+                          div(
+                            class = "collapse mt-2",
+                            id = "evalTableCollapse",
+                            div(
+                              class = "card card-body p-3",
+                              style = "border: 2px solid #0d6efd; border-radius: 10px;",
+                              mod_eval_table_ui("ccc_eval_table")
+                            )
+                          )
+                        ),
+
+                        # ── PLUS/DELTA TABLE (prominent) ─────────────────────
+                        div(
+                          class = "mb-4",
+                          tags$button(
+                            class = "btn btn-success btn-lg w-100 d-flex align-items-center justify-content-between",
+                            type = "button",
+                            `data-bs-toggle` = "collapse",
+                            `data-bs-target` = "#plusDeltaCollapse",
+                            `aria-expanded` = "false",
+                            style = "border-radius: 10px; font-weight: 600;",
+                            div(
+                              class = "d-flex align-items-center",
+                              icon("plus-minus", class = "fa-lg me-2"),
+                              span("Plus / Delta Feedback", class = "fs-5")
+                            ),
+                            div(
+                              tags$small("Strengths & growth areas", class = "text-light me-2"),
+                              icon("chevron-down")
+                            )
+                          ),
+                          div(
+                            class = "collapse mt-2",
+                            id = "plusDeltaCollapse",
+                            div(
+                              class = "card card-body p-3",
+                              style = "border: 2px solid #198754; border-radius: 10px;",
+                              mod_plus_delta_table_ui("ccc_plus_delta", title = NULL)
+                            )
+                          )
+                        ),
+
                         # Enhanced CCC Comments on ILP
                         div(
                           class = "ccc-comments-section mb-4 p-4",
@@ -1037,6 +1112,31 @@ ui <- page_fluid(
           id = "milestone-review-section",
           style = "display: none;",
           
+          # ITE Nomogram + Step 3 Status bar
+          fluidRow(
+            column(
+              width = 12,
+              div(
+                class = "d-flex flex-wrap gap-3 mb-3 p-3",
+                style = "background: #f8f9fa; border-radius: 10px; border: 1px solid #dee2e6;",
+                # ITE Nomogram button
+                tags$a(
+                  href = "https://019c6e98-bc22-40f0-d94c-ec16c5110b29.share.connect.posit.cloud",
+                  target = "_blank",
+                  class = "btn btn-info btn-lg px-4",
+                  style = "border-radius: 8px; font-weight: 600;",
+                  icon("chart-line", class = "me-2"),
+                  "ITE Nomogram"
+                ),
+                # Step 3 Status
+                div(
+                  class = "flex-grow-1",
+                  uiOutput("step3_status_display")
+                )
+              )
+            )
+          ),
+
           # Milestone Plots Section
           fluidRow(
             column(
@@ -1136,7 +1236,27 @@ ui <- page_fluid(
                   ),
                   
                   br(),
-                  
+
+                  # Live Milestone Preview (updates when sliders change)
+                  uiOutput("milestone_changes_banner"),
+                  div(
+                    id = "live-milestone-preview",
+                    class = "collapse",
+                    div(
+                      class = "mb-4 p-3",
+                      style = "background: #fffde7; border: 2px solid #ffc107; border-radius: 10px;",
+                      div(
+                        class = "d-flex align-items-center mb-2",
+                        icon("sync-alt", class = "fa-lg text-warning me-2"),
+                        h6("Live Milestone Preview", class = "text-warning mb-0 fw-bold"),
+                        tags$small(" — updates as you adjust sliders", class = "text-muted ms-2")
+                      ),
+                      plotOutput("live_milestone_plot", height = "320px")
+                    )
+                  ),
+
+                  br(),
+
                   # Milestone Assessment Interface
                   div(
                     # Special note for Intern Intro

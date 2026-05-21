@@ -17,7 +17,8 @@ server <- function(input, output, session) {
     redcap_prev_period = NULL,
     tab_order = c("pre_review", "wellness", "evaluations", "knowledge", 
                   "scholarship", "ilp", "career", "summary", "milestones"),
-    current_filter = "all"  # For CCC filtering
+    current_filter = "all",  # For CCC filtering
+    submission_summary = NULL  # Holds summary data after successful CCC submission
   )
   
   # Show loading notification
@@ -216,9 +217,18 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
+  # SELECTED RECORD ID (reactive helper used by eval/plus-delta modules)
+  # ============================================================================
+
+  selected_record_id <- reactive({
+    req(values$selected_resident)
+    find_record_id(app_data(), values$selected_resident$name)
+  })
+
+  # ============================================================================
   # PROCESSED RESIDENT DATA
   # ============================================================================
-  
+
   processed_resident_data <- reactive({
     data <- app_data()
     
@@ -667,203 +677,158 @@ server <- function(input, output, session) {
   })
   
   # ============================================================================
+  # CACHED RESIDENT STATUS DATA (computed once, filtered cheaply)
+  # ============================================================================
+
+  all_residents_computed <- reactive({
+    resident_data <- processed_resident_data()
+    current_period <- get_current_period()
+
+    if (is.null(resident_data) || !is.data.frame(resident_data) ||
+        !all(c("name", "access_code", "coach", "second_rev", "Level") %in% names(resident_data))) {
+      return(NULL)
+    }
+
+    all_residents <- resident_data %>%
+      filter(!is.na(name) & name != "",
+             !is.na(Level) & Level != "",
+             !is.na(access_code) & access_code != "",
+             !is.na(coach) & coach != "") %>%
+      group_by(name) %>%
+      slice(1) %>%
+      ungroup() %>%
+      distinct(name, .keep_all = TRUE) %>%
+      arrange(Level, name)
+
+    n <- nrow(all_residents)
+    redcap_periods <- character(n)
+    has_self_evals <- logical(n)
+    has_coach_reviews <- logical(n)
+    has_second_reviews <- logical(n)
+    has_ccc_reviews <- logical(n)
+    table_names <- character(n)
+    table_levels <- character(n)
+    table_access_codes <- character(n)
+    table_coaches <- character(n)
+    table_second_revs <- character(n)
+    self_eval_statuses <- character(n)
+    coach_review_statuses <- character(n)
+    second_review_statuses <- character(n)
+    ccc_review_statuses <- character(n)
+
+    for (i in seq_len(n)) {
+      res_name       <- all_residents$name[i]
+      res_level      <- all_residents$Level[i]
+      res_access_code <- all_residents$access_code[i]
+      res_coach      <- all_residents$coach[i]
+      res_second_rev <- all_residents$second_rev[i]
+
+      table_names[i]        <- ifelse(is.na(res_name),        "", as.character(res_name))
+      table_levels[i]       <- ifelse(is.na(res_level),       "Unknown", as.character(res_level))
+      table_access_codes[i] <- ifelse(is.na(res_access_code), "", as.character(res_access_code))
+      table_coaches[i]      <- ifelse(is.na(res_coach),       "Not assigned", as.character(res_coach))
+      table_second_revs[i]  <- ifelse(is.na(res_second_rev),  "Not assigned", as.character(res_second_rev))
+
+      redcap_period <- map_to_milestone_period(res_level, current_period)
+      redcap_periods[i] <- ifelse(is.na(redcap_period), current_period, as.character(redcap_period))
+
+      coach_period <- map_period_format(level = res_level, period = current_period, return_type = "instance")
+
+      has_self_evals[i]    <- check_self_eval_complete_status(resident_data, res_name, redcap_period, app_data())
+      has_coach_reviews[i] <- check_coach_review_complete_status(resident_data, res_name, coach_period)
+      has_second_reviews[i]<- check_second_review_complete_status(resident_data, res_name, coach_period)
+      has_ccc_reviews[i]   <- check_ccc_review_complete_status(resident_data, res_name, redcap_period, res_level, current_period)
+
+      self_eval_statuses[i]    <- if (has_self_evals[i])    '<div class="status-dot status-complete"></div>' else '<div class="status-dot status-incomplete"></div>'
+      coach_review_statuses[i] <- if (has_coach_reviews[i]) '<div class="status-dot status-complete"></div>' else '<div class="status-dot status-incomplete"></div>'
+      second_review_statuses[i]<- if (has_second_reviews[i])'<div class="status-dot status-complete"></div>' else '<div class="status-dot status-incomplete"></div>'
+      ccc_review_statuses[i]   <- if (has_ccc_reviews[i])   '<div class="status-dot status-complete"></div>' else '<div class="status-dot status-incomplete"></div>'
+    }
+
+    table_df <- data.frame(
+      `Resident Name`             = table_names,
+      `Level`                     = table_levels,
+      `Access Code`               = table_access_codes,
+      `Primary Coach`             = table_coaches,
+      `Second Reviewer`           = table_second_revs,
+      `Review Period`             = redcap_periods,
+      `Self Evaluation Complete?` = self_eval_statuses,
+      `Coach Review Complete?`    = coach_review_statuses,
+      `Second Review Complete?`   = second_review_statuses,
+      `CCC Review Complete?`      = ccc_review_statuses,
+      stringsAsFactors = FALSE
+    )
+
+    list(
+      table          = table_df,
+      has_self_evals = has_self_evals,
+      has_coach_reviews = has_coach_reviews,
+      has_second_reviews = has_second_reviews,
+      has_ccc_reviews = has_ccc_reviews
+    )
+  })
+
+  # ============================================================================
   # MAIN CCC RESIDENTS TABLE WITH FILTERING
   # ============================================================================
-  
+
   output$ccc_residents_table <- DT::renderDataTable({
-    
-    # Get resident data using your exact working approach
-    resident_data <- processed_resident_data()
-    
-    # Calculate current period using your existing function
-    current_period <- get_current_period()
-    message("Current period: ", current_period)
-    
-    # Check if we have resident data with the required columns
-    if (!is.null(resident_data) && is.data.frame(resident_data) && 
-        all(c("name", "access_code", "coach", "second_rev", "Level") %in% names(resident_data))) {
-      
-      # Use the exact same approach as your working coaching dashboard
-      all_residents <- resident_data %>%
-        filter(!is.na(name) & name != "", 
-               !is.na(Level) & Level != "",
-               !is.na(access_code) & access_code != "",
-               !is.na(coach) & coach != "") %>%
-        group_by(name) %>%
-        slice(1) %>%
-        ungroup() %>%
-        distinct(name, .keep_all = TRUE) %>%
-        arrange(Level, name)
-      
-      message("Found ", nrow(all_residents), " unique residents with assigned coaches for CCC review")
-      
-      # Create empty vectors to store status indicators
-      redcap_periods <- character(nrow(all_residents))
-      self_eval_statuses <- character(nrow(all_residents))
-      coach_review_statuses <- character(nrow(all_residents))
-      second_review_statuses <- character(nrow(all_residents))
-      ccc_review_statuses <- character(nrow(all_residents))
-      
-      # Store completion booleans for filtering
-      has_self_evals <- logical(nrow(all_residents))
-      has_coach_reviews <- logical(nrow(all_residents))
-      has_second_reviews <- logical(nrow(all_residents))
-      has_ccc_reviews <- logical(nrow(all_residents))
-      
-      # Create vectors to store the ACTUAL data for the table
-      table_names <- character(nrow(all_residents))
-      table_levels <- character(nrow(all_residents))
-      table_access_codes <- character(nrow(all_residents))
-      table_coaches <- character(nrow(all_residents))
-      table_second_revs <- character(nrow(all_residents))
-      
-      # Process each resident to determine completion statuses
-      for (i in 1:nrow(all_residents)) {
-        res_name <- all_residents$name[i]
-        res_level <- all_residents$Level[i]
-        res_access_code <- all_residents$access_code[i]
-        res_coach <- all_residents$coach[i]
-        res_second_rev <- all_residents$second_rev[i]
-        
-        # Store the actual data in our vectors
-        table_names[i] <- ifelse(is.na(res_name), "", as.character(res_name))
-        table_levels[i] <- ifelse(is.na(res_level), "Unknown", as.character(res_level))
-        table_access_codes[i] <- ifelse(is.na(res_access_code), "", as.character(res_access_code))
-        table_coaches[i] <- ifelse(is.na(res_coach), "Not assigned", as.character(res_coach))
-        table_second_revs[i] <- ifelse(is.na(res_second_rev), "Not assigned", as.character(res_second_rev))
-        
-        # Map the period to REDCap format using your existing functions
-        redcap_period <- map_to_milestone_period(res_level, current_period)
-        redcap_periods[i] <- ifelse(is.na(redcap_period), current_period, as.character(redcap_period))
-        
-        # Convert period to REDCap instance
-        coach_period <- map_period_format(
-          level = res_level,
-          period = current_period,
-          return_type = "instance"
-        )
-        
-        # Check completion statuses using the fixed functions
-        has_self_eval <- check_self_eval_complete_status(resident_data, res_name, redcap_period, app_data())
-        has_coach_review <- check_coach_review_complete_status(resident_data, res_name, coach_period)
-        has_second_review <- check_second_review_complete_status(resident_data, res_name, coach_period)
-        has_ccc_review <- check_ccc_review_complete_status(resident_data, res_name, redcap_period, res_level, current_period)
-        
-        # Store boolean values for filtering
-        has_self_evals[i] <- has_self_eval
-        has_coach_reviews[i] <- has_coach_review
-        has_second_reviews[i] <- has_second_review
-        has_ccc_reviews[i] <- has_ccc_review
-        
-        # Create status dots
-        self_eval_statuses[i] <- if(has_self_eval) 
-          '<div class="status-dot status-complete"></div>' else 
-            '<div class="status-dot status-incomplete"></div>'
-        
-        coach_review_statuses[i] <- if(has_coach_review) 
-          '<div class="status-dot status-complete"></div>' else 
-            '<div class="status-dot status-incomplete"></div>'
-        
-        second_review_statuses[i] <- if(has_second_review) 
-          '<div class="status-dot status-complete"></div>' else 
-            '<div class="status-dot status-incomplete"></div>'
-        
-        ccc_review_statuses[i] <- if(has_ccc_review) 
-          '<div class="status-dot status-complete"></div>' else 
-            '<div class="status-dot status-incomplete"></div>'
-        
-      } # End of the for loop that processes each resident
-      
-      # Create the final dataframe
-      final_residents_table <- data.frame(
-        `Resident Name` = table_names,
-        `Level` = table_levels,
-        `Access Code` = table_access_codes,
-        `Primary Coach` = table_coaches,
-        `Second Reviewer` = table_second_revs,
-        `Review Period` = redcap_periods,
-        `Self Evaluation Complete?` = self_eval_statuses,
-        `Coach Review Complete?` = coach_review_statuses,
-        `Second Review Complete?` = second_review_statuses,
-        `CCC Review Complete?` = ccc_review_statuses,
-        stringsAsFactors = FALSE
-      )
-      
-      # Apply filters based on current filter selection
-      filter_indices <- switch(values$current_filter,
-                               "all" = 1:nrow(final_residents_table),
-                               # For level sorting, just return all indices (we'll sort differently)
-                               "level" = 1:nrow(final_residents_table),  
-                               "fully_complete" = which(has_self_evals & has_coach_reviews & has_second_reviews & has_ccc_reviews),
-                               "self_done_others_pending" = which(has_self_evals & (!has_coach_reviews | !has_second_reviews)),
-                               "coach_done_second_pending" = which(has_coach_reviews & !has_second_reviews),
-                               "reviews_done_ccc_pending" = which(has_coach_reviews & has_second_reviews & !has_ccc_reviews),
-                               1:nrow(final_residents_table)  # Default to all
-      )
-      
-      # Apply the filter
-      if (values$current_filter == "level") {
-        # Get the data first
-        temp_table <- final_residents_table[filter_indices, ]
-        
-        # Sort using explicit column references
-        level_col <- temp_table[[which(names(temp_table) == "Level")]]
-        name_col <- temp_table[[which(names(temp_table) == "Resident.Name")]]
-        
-        # Create sort order
-        sort_order <- order(level_col, name_col)
-        filtered_table <- temp_table[sort_order, ]
-        
-      } else {
-        # For other filters, subset the rows
-        filtered_table <- final_residents_table[filter_indices, ]
-      }
-      
-      # Update the caption based on filter
-      caption_text <- switch(values$current_filter,
-                             "all" = "All Residents - CCC Review Status",
-                             "level" = "All Residents - Sorted by Level",
-                             "fully_complete" = paste0("Fully Complete Residents (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
-                             "self_done_others_pending" = paste0("Self-Eval Done, Others Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
-                             "coach_done_second_pending" = paste0("Coach Done, Second Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
-                             "reviews_done_ccc_pending" = paste0("Reviews Done, CCC Pending (", length(filter_indices), " of ", nrow(final_residents_table), ")"),
-                             "All Residents - CCC Review Status"
-      )
-      
-      if (nrow(filtered_table) > 0) {
-        # Create table with click handling and return it
-        return(datatable_with_click_and_single_search(
-          filtered_table, 
-          caption = caption_text
-        ))
-      }
-    } else {
-      # Error handling
-      if (is.null(resident_data)) {
-        message("resident_data is NULL")
-      } else if (!is.data.frame(resident_data)) {
-        message("resident_data is not a dataframe")
-      } else {
-        message("Missing required columns in resident_data")
-      }
-    }
-    
-    # Return empty datatable if no data found
-    return(datatable_with_click_and_single_search(
+    # Use the cached reactive — only recomputes when data changes, not on filter clicks
+    cached <- all_residents_computed()
+
+    empty_table <- datatable_with_click_and_single_search(
       data.frame(
-        `Resident Name` = character(0),
-        `Level` = character(0),
-        `Access Code` = character(0),
-        `Primary Coach` = character(0),
-        `Second Reviewer` = character(0), 
-        `Review Period` = character(0),
-        `Self Evaluation Complete?` = character(0),
-        `Coach Review Complete?` = character(0),
-        `Second Review Complete?` = character(0),
-        `CCC Review Complete?` = character(0)
+        `Resident Name` = character(0), `Level` = character(0),
+        `Access Code` = character(0), `Primary Coach` = character(0),
+        `Second Reviewer` = character(0), `Review Period` = character(0),
+        `Self Evaluation Complete?` = character(0), `Coach Review Complete?` = character(0),
+        `Second Review Complete?` = character(0), `CCC Review Complete?` = character(0)
       ),
       caption = "No residents found"
-    ))
+    )
+
+    if (is.null(cached)) return(empty_table)
+
+    final_residents_table <- cached$table
+    has_self_evals    <- cached$has_self_evals
+    has_coach_reviews <- cached$has_coach_reviews
+    has_second_reviews<- cached$has_second_reviews
+    has_ccc_reviews   <- cached$has_ccc_reviews
+
+    filter_indices <- switch(values$current_filter,
+      "all"                      = seq_len(nrow(final_residents_table)),
+      "level"                    = seq_len(nrow(final_residents_table)),
+      "fully_complete"           = which(has_self_evals & has_coach_reviews & has_second_reviews & has_ccc_reviews),
+      "self_done_others_pending" = which(has_self_evals & (!has_coach_reviews | !has_second_reviews)),
+      "coach_done_second_pending"= which(has_coach_reviews & !has_second_reviews),
+      "reviews_done_ccc_pending" = which(has_coach_reviews & has_second_reviews & !has_ccc_reviews),
+      seq_len(nrow(final_residents_table))
+    )
+
+    if (values$current_filter == "level") {
+      temp <- final_residents_table[filter_indices, ]
+      sort_order <- order(temp[["Level"]], temp[["Resident.Name"]])
+      filtered_table <- temp[sort_order, ]
+    } else {
+      filtered_table <- final_residents_table[filter_indices, ]
+    }
+
+    n_total  <- nrow(final_residents_table)
+    n_filter <- length(filter_indices)
+    caption_text <- switch(values$current_filter,
+      "all"                       = "All Residents - CCC Review Status",
+      "level"                     = "All Residents - Sorted by Level",
+      "fully_complete"            = paste0("Fully Complete (", n_filter, " of ", n_total, ")"),
+      "self_done_others_pending"  = paste0("Self-Eval Done, Others Pending (", n_filter, " of ", n_total, ")"),
+      "coach_done_second_pending" = paste0("Coach Done, Second Pending (", n_filter, " of ", n_total, ")"),
+      "reviews_done_ccc_pending"  = paste0("Reviews Done, CCC Pending (", n_filter, " of ", n_total, ")"),
+      "All Residents - CCC Review Status"
+    )
+
+    if (nrow(filtered_table) > 0) {
+      return(datatable_with_click_and_single_search(filtered_table, caption = caption_text))
+    }
+    empty_table
   })
   
   # ============================================================================
@@ -1629,6 +1594,245 @@ server <- function(input, output, session) {
     }
   })
   
+  # ============================================================================
+  # GMED MODULE INTEGRATIONS (Eval Table + Plus/Delta Table)
+  # ============================================================================
+
+  # Reactive wrapper for eval data compatible with gmed modules
+  eval_module_data <- reactive({
+    raw <- app_data()$raw_eval_data
+    if (is.null(raw) || !is.data.frame(raw)) return(NULL)
+    if (!"redcap_repeat_instrument" %in% names(raw)) {
+      raw$redcap_repeat_instrument <- "Assessment"
+    }
+    raw
+  })
+
+  ccc_eval_mod <- mod_eval_table_server(
+    id        = "ccc_eval_table",
+    rdm_data  = eval_module_data,
+    record_id = reactive({
+      req(values$selected_resident)
+      selected_record_id()
+    }),
+    data_dict = isolate(app_data()$ass_dict)
+  )
+
+  ccc_plus_delta_mod <- mod_plus_delta_table_server(
+    id        = "ccc_plus_delta",
+    rdm_data  = eval_module_data,
+    record_id = reactive({
+      req(values$selected_resident)
+      selected_record_id()
+    })
+  )
+
+  # ============================================================================
+  # PREVIOUS CCC ILP NOTE
+  # ============================================================================
+
+  output$prev_ccc_ilp_note <- renderUI({
+    req(values$selected_resident)
+
+    ccc_review_data <- app_data()$ccc_review
+    if (is.null(ccc_review_data) || !is.data.frame(ccc_review_data)) {
+      return(div(class = "text-muted fst-italic small", "No previous CCC review data available."))
+    }
+
+    rec_id <- tryCatch(selected_record_id(), error = function(e) NULL)
+    if (is.null(rec_id)) {
+      return(div(class = "text-muted fst-italic small", "Could not resolve record ID."))
+    }
+
+    current_session <- if (!is.null(input$ccc_session) && nzchar(input$ccc_session)) {
+      suppressWarnings(as.integer(input$ccc_session))
+    } else {
+      NA_integer_
+    }
+
+    # Determine the previous scheduled session number
+    prev_session <- if (!is.na(current_session) && current_session > 1) current_session - 1L else NA_integer_
+
+    if (is.na(prev_session)) {
+      return(div(class = "text-muted fst-italic small", "No previous scheduled CCC review."))
+    }
+
+    # Filter for this resident's previous session
+    id_col <- if ("record_id" %in% names(ccc_review_data)) "record_id" else NULL
+    inst_col <- if ("redcap_repeat_instance" %in% names(ccc_review_data)) "redcap_repeat_instance" else NULL
+    sess_col <- if ("ccc_session" %in% names(ccc_review_data)) "ccc_session" else NULL
+
+    prev_rows <- ccc_review_data
+    if (!is.null(id_col)) {
+      prev_rows <- prev_rows[!is.na(prev_rows[[id_col]]) & prev_rows[[id_col]] == rec_id, ]
+    }
+
+    if (!is.null(inst_col)) {
+      inst_match <- !is.na(prev_rows[[inst_col]]) &
+        suppressWarnings(as.integer(prev_rows[[inst_col]])) == prev_session
+      if (!is.null(sess_col)) {
+        sess_match <- !is.na(prev_rows[[sess_col]]) &
+          suppressWarnings(as.integer(prev_rows[[sess_col]])) == prev_session
+        prev_rows <- prev_rows[inst_match | sess_match, ]
+      } else {
+        prev_rows <- prev_rows[inst_match, ]
+      }
+    }
+
+    session_names <- c("1" = "Mid Intern", "2" = "End Intern", "3" = "Mid PGY2",
+                       "4" = "End PGY2",  "5" = "Mid PGY3",  "6" = "Graduation",
+                       "7" = "Intern Intro")
+    prev_name <- session_names[as.character(prev_session)]
+    if (is.na(prev_name)) prev_name <- paste("Session", prev_session)
+
+    if (nrow(prev_rows) > 0 && "ccc_ilp" %in% names(prev_rows)) {
+      ilp_note <- prev_rows$ccc_ilp[1]
+      if (!is.na(ilp_note) && nzchar(trimws(ilp_note))) {
+        return(div(
+          tags$small(class = "text-muted d-block mb-1",
+                     icon("calendar-alt", class = "me-1"), "From: ", tags$strong(prev_name)),
+          div(
+            style = "background: #fff; border: 1px solid #ffc107; border-radius: 6px; padding: 10px; max-height: 180px; overflow-y: auto; font-size: 0.9rem; line-height: 1.5;",
+            ilp_note
+          )
+        ))
+      }
+    }
+
+    div(class = "text-muted fst-italic small",
+        paste0("No ILP note found in ", prev_name, " review."))
+  })
+
+  # ============================================================================
+  # STEP 3 STATUS DISPLAY
+  # ============================================================================
+
+  output$step3_status_display <- renderUI({
+    req(values$selected_resident)
+
+    resident_data <- processed_resident_data()
+    res_data <- resident_data %>%
+      filter(name == values$selected_resident$name) %>%
+      slice(1)
+
+    if (nrow(res_data) == 0) return(NULL)
+
+    step3_fields <- names(res_data)[grepl("step.?3|usmle.?3|step3", tolower(names(res_data)))]
+
+    if (length(step3_fields) > 0) {
+      items <- lapply(step3_fields, function(f) {
+        val <- res_data[[f]][1]
+        if (!is.na(val) && nzchar(trimws(as.character(val)))) {
+          div(class = "d-flex align-items-center gap-2",
+              tags$strong(gsub("_", " ", f), ":"),
+              tags$span(class = "badge bg-secondary", as.character(val)))
+        }
+      })
+      items <- Filter(Negate(is.null), items)
+      if (length(items) > 0) {
+        return(div(
+          class = "d-flex flex-wrap align-items-center gap-2",
+          tags$span(class = "fw-bold text-secondary me-1", icon("clipboard-check", class = "me-1"), "Step 3:"),
+          do.call(tagList, items)
+        ))
+      }
+    }
+
+    # No step 3 data found
+    div(class = "text-muted small fst-italic",
+        icon("info-circle", class = "me-1"), "Step 3 data not available")
+  })
+
+  # ============================================================================
+  # LIVE MILESTONE PLOT (updates as sliders change)
+  # ============================================================================
+
+  # Mapping from module keys to milestone column names
+  .milestone_key_to_col <- c(
+    "rep_pc1" = "PC1", "rep_pc2" = "PC2", "rep_pc3" = "PC3",
+    "rep_pc4" = "PC4", "rep_pc5" = "PC5", "rep_pc6" = "PC6",
+    "rep_mk1" = "MK1", "rep_mk2" = "MK2", "rep_mk3" = "MK3",
+    "rep_sbp1" = "SBP1", "rep_sbp2" = "SBP2", "rep_sbp3" = "SBP3",
+    "rep_pbl1" = "PBL1", "rep_pbl2" = "PBL2",
+    "rep_prof1" = "PROF1", "rep_prof2" = "PROF2",
+    "rep_prof3" = "PROF3", "rep_prof4" = "PROF4",
+    "rep_ics1" = "ICS1", "rep_ics2" = "ICS2", "rep_ics3" = "ICS3"
+  )
+
+  # Banner that shows when there are pending milestone changes, and opens the live preview
+  output$milestone_changes_banner <- renderUI({
+    has_ch <- tryCatch(ccc_miles_mod$has_changes(), error = function(e) FALSE)
+    changed <- tryCatch(ccc_miles_mod$changed_milestones(), error = function(e) list())
+
+    if (!has_ch || length(changed) == 0) return(NULL)
+
+    change_tags <- lapply(names(changed), function(key) {
+      ch <- changed[[key]]
+      col_name <- .milestone_key_to_col[key]
+      if (is.na(col_name)) col_name <- key
+      span(
+        class = "badge bg-warning text-dark me-1 mb-1",
+        col_name, ": ", ch$from_level, " → ", ch$to_level
+      )
+    })
+
+    div(
+      class = "alert alert-warning d-flex flex-wrap align-items-center gap-2 mb-3",
+      icon("exclamation-circle", class = "fa-lg me-2"),
+      tags$strong(length(changed), " milestone change(s) pending:"),
+      div(class = "d-flex flex-wrap gap-1", do.call(tagList, change_tags)),
+      tags$button(
+        class = "btn btn-sm btn-outline-warning ms-auto",
+        type = "button",
+        `data-bs-toggle` = "collapse",
+        `data-bs-target` = "#live-milestone-preview",
+        icon("chart-bar", class = "me-1"), "Preview"
+      )
+    )
+  })
+
+  output$live_milestone_plot <- renderPlot({
+    req(values$selected_resident)
+
+    all_scores <- tryCatch(ccc_miles_mod$all_scores(), error = function(e) list())
+    if (length(all_scores) == 0) return(NULL)
+
+    # Build a data frame row compatible with miles_plot
+    row <- data.frame(
+      name   = values$selected_resident$name,
+      period = values$redcap_period %||% "Preview",
+      stringsAsFactors = FALSE
+    )
+    for (key in names(.milestone_key_to_col)) {
+      col <- .milestone_key_to_col[key]
+      row[[col]] <- if (!is.null(all_scores[[key]])) as.numeric(all_scores[[key]]) else 0
+    }
+
+    # Try miles_plot first, fall back to simple ggplot
+    tryCatch({
+      miles_plot(row, values$selected_resident$name, row$period)
+    }, error = function(e) {
+      score_data <- data.frame(
+        Milestone = names(.milestone_key_to_col),
+        Score     = sapply(names(.milestone_key_to_col), function(k) {
+          if (!is.null(all_scores[[k]])) as.numeric(all_scores[[k]]) else 0
+        }),
+        stringsAsFactors = FALSE
+      )
+      ggplot(score_data, aes(x = reorder(Milestone, -Score), y = Score, fill = Score)) +
+        geom_col(width = 0.7) +
+        scale_fill_gradient2(low = "#e74c3c", mid = "#f39c12", high = "#27ae60",
+                             midpoint = 5, limits = c(0, 9)) +
+        scale_y_continuous(limits = c(0, 9), breaks = 0:9) +
+        labs(title = paste("Proposed Milestones —", values$selected_resident$name),
+             x = NULL, y = "Score (0–9)") +
+        theme_minimal(base_size = 11) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1),
+              legend.position = "none",
+              plot.title = element_text(face = "bold", colour = "#856404"))
+    })
+  })
+
   # Milestone interface content
   output$milestone_interface_content <- renderUI({
     req(values$selected_resident)
@@ -1909,48 +2113,120 @@ server <- function(input, output, session) {
       "Not applicable"
     }
     
+    # Build richer milestone change summary
+    changed_miles <- tryCatch(ccc_miles_mod$changed_milestones(), error = function(e) list())
+    milestone_changes_ui <- if (length(changed_miles) > 0) {
+      change_rows <- lapply(names(changed_miles), function(key) {
+        ch <- changed_miles[[key]]
+        col_name <- .milestone_key_to_col[key]
+        if (is.na(col_name)) col_name <- key
+        tags$li(
+          tags$span(class = "fw-bold", col_name), ": ",
+          tags$span(class = "text-secondary", ch$from_level),
+          " → ",
+          tags$span(class = "text-success fw-bold", ch$to_level)
+        )
+      })
+      tagList(
+        tags$strong(paste(length(changed_miles), "milestone(s) modified:")),
+        tags$ul(class = "mb-0 mt-1 small", do.call(tagList, change_rows))
+      )
+    } else NULL
+
+    # ILP note preview
+    ilp_preview <- if (!is.null(input$ccc_ilp) && nzchar(trimws(input$ccc_ilp))) {
+      ilp_txt <- trimws(input$ccc_ilp)
+      if (nchar(ilp_txt) > 120) ilp_txt <- paste0(substr(ilp_txt, 1, 120), "…")
+      div(class = "mt-2",
+          tags$strong("ILP Comment: "),
+          tags$span(class = "text-muted fst-italic", ilp_txt))
+    } else NULL
+
+    # Concern notes preview
+    concern_preview <- if (!is.null(input$ccc_concern) && input$ccc_concern == "1" &&
+                           !is.null(input$ccc_concern_notes) && nzchar(trimws(input$ccc_concern_notes))) {
+      note <- trimws(input$ccc_concern_notes)
+      if (nchar(note) > 100) note <- paste0(substr(note, 1, 100), "…")
+      div(class = "mt-2",
+          tags$strong("Concern Notes: "),
+          tags$span(class = "text-danger fst-italic small", note))
+    } else NULL
+
     showModal(modalDialog(
       title = div(
-        icon("exclamation-triangle", class = "text-warning me-2"),
+        icon("check-circle", class = "text-success me-2"),
         "Confirm CCC Review Submission"
       ),
-      
+      size = "l",
+
       div(
-        h5("Review Summary:"),
-        tags$ul(
-          tags$li(tags$strong("Resident: "), values$selected_resident$name),
-          tags$li(tags$strong("Review Type: "), review_type_display),
-          if (input$ccc_rev_type == "1") {
-            tags$li(tags$strong("Session: "), session_display)
-          },
-          if (input$ccc_rev_type == "1" && !is.null(input$ccc_session) && input$ccc_session != "7") {
-            tags$li(tags$strong("Milestones: "), milestone_display)
-          },
-          tags$li(tags$strong("Concerns: "), concerns_display)
-        ),
-        
-        hr(),
-        
+        # Header summary card
         div(
-          class = "alert alert-info",
-          icon("info-circle", class = "me-2"),
+          class = "card mb-3",
+          style = "border: 2px solid #198754;",
+          div(
+            class = "card-header bg-success text-white py-2",
+            icon("user-md", class = "me-2"),
+            tags$strong(values$selected_resident$name),
+            tags$span(class = "ms-3 badge bg-light text-dark",
+                      paste(review_type_display, "·", session_display))
+          ),
+          div(
+            class = "card-body py-3",
+            fluidRow(
+              column(6,
+                tags$table(
+                  class = "table table-sm mb-0",
+                  tags$tbody(
+                    tags$tr(tags$td(tags$strong("Review Type")), tags$td(review_type_display)),
+                    if (!is.null(input$ccc_session) && input$ccc_session != "")
+                      tags$tr(tags$td(tags$strong("Session")), tags$td(session_display)),
+                    tags$tr(tags$td(tags$strong("Concerns")),
+                            tags$td(
+                              if (concerns_display == "Yes")
+                                span(class = "badge bg-danger", "Yes - Concerns")
+                              else
+                                span(class = "badge bg-success", "No Concerns")
+                            )),
+                    if (!is.null(input$ccc_session) && input$ccc_session != "7")
+                      tags$tr(tags$td(tags$strong("Milestones")), tags$td(milestone_display))
+                  )
+                )
+              ),
+              column(6,
+                if (!is.null(milestone_changes_ui)) {
+                  div(class = "p-2 bg-light rounded", milestone_changes_ui)
+                } else if (milestone_display == "Acceptable") {
+                  div(class = "alert alert-success py-2 mb-0 small",
+                      icon("check", class = "me-1"), "Milestones accepted as-is")
+                }
+              )
+            ),
+            if (!is.null(ilp_preview)) hr(),
+            ilp_preview,
+            concern_preview
+          )
+        ),
+
+        div(
+          class = "alert alert-warning mb-0",
+          icon("exclamation-triangle", class = "me-2"),
           tags$strong("This action cannot be undone."),
           " The CCC review will be permanently saved to REDCap."
         )
       ),
-      
+
       footer = tagList(
         modalButton("Cancel"),
         actionButton(
           "confirm_submit_ccc",
-          "Submit CCC Review",
-          class = "btn-success",
-          icon = icon("save")
+          "Confirm & Submit",
+          class = "btn-success btn-lg",
+          icon = icon("check-circle")
         )
       ),
-      
-      easyClose = FALSE,
-      size = "m"
+
+      easyClose = FALSE
     ))
   })
   
@@ -2322,28 +2598,79 @@ server <- function(input, output, session) {
           }
           
           if (!is.na(records_updated) && records_updated > 0) {
-            success_message <- if (milestone_edits_made) {
-              paste0("CCC review and milestone edits successfully submitted! (", records_updated, " record updated)")
-            } else {
-              paste0("CCC review successfully submitted! (", records_updated, " record updated)")
-            }
-            
-            showNotification(success_message, type = "message", duration = 5)
-            
-            # Navigate back to dashboard
-            shinyjs::hide("ccc-review-pages")
-            shinyjs::hide("milestone-review-section")
-            shinyjs::show("scheduled-step-2")
-            shinyjs::delay(100, {
-              shinyjs::show("ccc-dashboard-page")
-            })
-            
-            # Reset resident selection and clear form
-            values$selected_resident <- NULL
-            values$current_period <- NULL
-            values$redcap_period <- NULL
-            clear_ccc_form_inputs(session)
-            
+            session_labels <- c("1"="Mid Intern","2"="End Intern","3"="Mid PGY2",
+                                "4"="End PGY2","5"="Mid PGY3","6"="Graduation","7"="Intern Intro")
+            session_label <- if (input$ccc_rev_type == "1")
+              session_labels[as.character(ccc_session_value)] %||% ccc_session_value
+            else "Interim"
+
+            changed_miles <- tryCatch(ccc_miles_mod$changed_milestones(), error = function(e) list())
+
+            values$submission_summary <- list(
+              resident   = values$selected_resident$name,
+              rev_type   = if (input$ccc_rev_type == "1") "Scheduled" else "Interim",
+              session    = session_label,
+              concern    = input$ccc_concern %||% "0",
+              ilp        = if (!is.null(input$ccc_ilp)) trimws(input$ccc_ilp) else "",
+              notes      = if (!is.null(input$ccc_concern_notes)) trimws(input$ccc_concern_notes) else "",
+              mile_edits = milestone_edits_made,
+              changes    = changed_miles
+            )
+
+            showModal(modalDialog(
+              title = div(class = "d-flex align-items-center gap-2",
+                          icon("check-circle", class = "text-success fa-lg"),
+                          span("Review Submitted Successfully", class = "fw-bold")),
+              size = "m",
+              div(class = "p-1",
+                div(class = "alert alert-success mb-3 py-2",
+                    strong(values$submission_summary$resident), " — ",
+                    values$submission_summary$rev_type, " Review",
+                    if (values$submission_summary$rev_type == "Scheduled")
+                      span(class = "badge bg-success ms-2", values$submission_summary$session)
+                ),
+                tags$table(class = "table table-sm table-bordered mb-3",
+                  tags$tbody(
+                    tags$tr(tags$th("Concerns", style="width:35%"),
+                            tags$td(if (values$submission_summary$concern == "1")
+                              span(class="badge bg-danger", "Yes — Concerns Flagged")
+                              else span(class="badge bg-secondary", "None"))),
+                    tags$tr(tags$th("Milestones"),
+                            tags$td(if (milestone_edits_made)
+                              span(class="badge bg-warning text-dark", "Edits Submitted")
+                              else span(class="badge bg-secondary", "No changes"))),
+                    if (nzchar(values$submission_summary$ilp))
+                      tags$tr(tags$th("ILP Comment"),
+                              tags$td(style="font-size:0.85em;",
+                                      substr(values$submission_summary$ilp, 1, 180),
+                                      if (nchar(values$submission_summary$ilp) > 180) "…")),
+                    if (nzchar(values$submission_summary$notes))
+                      tags$tr(tags$th("Concern Notes"),
+                              tags$td(style="font-size:0.85em;",
+                                      substr(values$submission_summary$notes, 1, 140),
+                                      if (nchar(values$submission_summary$notes) > 140) "…"))
+                  )
+                ),
+                if (length(changed_miles) > 0) div(
+                  class = "mb-2",
+                  strong("Milestone Changes:"),
+                  tags$ul(class = "list-unstyled mt-1 mb-0",
+                    lapply(names(changed_miles), function(key) {
+                      col <- .milestone_key_to_col[key] %||% key
+                      ch  <- changed_miles[[key]]
+                      tags$li(class = "small",
+                              span(class = "badge bg-light text-dark border me-1", col),
+                              ch$from_level, " → ",
+                              span(class = "fw-bold", ch$to_level))
+                    })
+                  )
+                )
+              ),
+              footer = actionButton("done_success_btn", "Back to Dashboard",
+                                    class = "btn-success", icon = icon("arrow-left")),
+              easyClose = FALSE
+            ))
+
           } else {
             showNotification("Error: No records were updated in REDCap. Please try again.", 
                              type = "error", duration = 10)
@@ -2351,54 +2678,30 @@ server <- function(input, output, session) {
           
         }, error = function(e) {
           message("Parse error but HTTP 200, assuming success: ", e$message)
-          
-          success_message <- if (milestone_edits_made) {
-            "CCC review and milestone edits submitted successfully!"
-          } else {
-            "CCC review submitted successfully!"
-          }
-          
-          showNotification(success_message, type = "message", duration = 5)
-          
-          # Navigate back to dashboard
+          showNotification("CCC review submitted (response parse warning).", type = "message", duration = 4)
+          # Navigate back to dashboard immediately for parse-error path
           shinyjs::hide("ccc-review-pages")
           shinyjs::hide("milestone-review-section")
           shinyjs::show("scheduled-step-2")
-          shinyjs::delay(100, {
-            shinyjs::show("ccc-dashboard-page")
-          })
-          
-          # Reset resident selection and clear form
+          shinyjs::delay(100, { shinyjs::show("ccc-dashboard-page") })
           values$selected_resident <- NULL
-          values$current_period <- NULL
-          values$redcap_period <- NULL
+          values$current_period    <- NULL
+          values$redcap_period     <- NULL
           clear_ccc_form_inputs(session)
         })
         
       } else {
         if (grepl("Form Status field", content_text)) {
-          success_message <- if (milestone_edits_made) {
-            "CCC review and milestone edits saved (form status warning ignored)"
-          } else {
-            "CCC review saved (form status warning ignored)"
-          }
-          
-          showNotification(success_message, type = "message", duration = 5)
-          
-          # Navigate back to dashboard
+          showNotification("CCC review saved (form status warning ignored).", type = "message", duration = 4)
+          # Navigate back directly
           shinyjs::hide("ccc-review-pages")
           shinyjs::hide("milestone-review-section")
           shinyjs::show("scheduled-step-2")
-          shinyjs::delay(100, {
-            shinyjs::show("ccc-dashboard-page")
-          })
-          
-          # Reset resident selection and clear form
+          shinyjs::delay(100, { shinyjs::show("ccc-dashboard-page") })
           values$selected_resident <- NULL
-          values$current_period <- NULL
-          values$redcap_period <- NULL
+          values$current_period    <- NULL
+          values$redcap_period     <- NULL
           clear_ccc_form_inputs(session)
-          
         } else {
           showNotification(paste("REDCap error (", status_code, "):", content_text), 
                            type = "error", duration = 10)
@@ -2406,7 +2709,21 @@ server <- function(input, output, session) {
       }
     })
   })
-  
+
+  # Navigate back to dashboard after success modal is dismissed
+  observeEvent(input$done_success_btn, {
+    removeModal()
+    shinyjs::hide("ccc-review-pages")
+    shinyjs::hide("milestone-review-section")
+    shinyjs::show("scheduled-step-2")
+    shinyjs::delay(100, { shinyjs::show("ccc-dashboard-page") })
+    values$selected_resident <- NULL
+    values$current_period    <- NULL
+    values$redcap_period     <- NULL
+    values$submission_summary <- NULL
+    clear_ccc_form_inputs(session)
+  })
+
   # Handle interim review submission
   observeEvent(input$submit_interim_review, {
     req(values$selected_resident)
