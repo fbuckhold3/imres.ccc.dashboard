@@ -581,3 +581,101 @@ div[data-card-type="resident-table"] {
     padding: 6px 12px;
   }
 }
+
+/* ============================================================================
+   RADIO / CHECKBOX VISUAL SELECTION STATE
+   ============================================================================ */
+
+/* Highlight a radio option's label row when checked */
+.shiny-input-container .radio label {
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  display: block;
+  margin-bottom: 4px;
+}
+.shiny-input-container .radio label:hover {
+  background: #f0f5ff;
+  border-color: #c5d8ff;
+}
+.shiny-input-container .radio.shiny-selected label {
+  background: linear-gradient(135deg, #e3f0ff 0%, #cde0ff 100%);
+  border-color: #4a90e2;
+  font-weight: 600;
+  color: #1a4f8a;
+}
+
+/* Highlight a checkbox option when checked */
+.shiny-input-container .checkbox label {
+  cursor: pointer;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+  display: block;
+  margin-bottom: 3px;
+}
+.shiny-input-container .checkbox label:hover {
+  background: #f0f5ff;
+  border-color: #c5d8ff;
+}
+.shiny-input-container .checkbox.shiny-cb-selected label {
+  background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+  border-color: #4caf50;
+  font-weight: 600;
+  color: #1b5e20;
+}
+
+/* ============================================================================
+   REVIEW TYPE BUTTON-CARD SELECTOR
+   ============================================================================ */
+.review-type-btn {
+  border-color: #dee2e6 !important;
+  color: #495057;
+  background: #fafbfc;
+  user-select: none;
+}
+.review-type-btn:hover {
+  border-color: #4a90e2 !important;
+  background: #f0f7ff;
+  color: #1a4f8a;
+}
+.selected-review-btn {
+  border-color: #4a90e2 !important;
+  background: linear-gradient(135deg, #e3f0ff 0%, #cce4ff 100%) !important;
+  color: #1a4f8a !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(74,144,226,0.25);
+}
+.selected-review-btn .fa, .selected-review-btn svg {
+  color: #1976d2 !important;
+}
+
+/* ============================================================================
+   STEP BADGE
+   ============================================================================ */
+.step-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #4a90e2;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+   REFERENCE PANEL
+   ============================================================================ */
+.ref-info-panel {
+  position: sticky;
+  top: 4px;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(74,144,226,0.12);
+}

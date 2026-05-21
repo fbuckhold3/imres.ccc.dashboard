@@ -222,7 +222,7 @@ server <- function(input, output, session) {
 
   selected_record_id <- reactive({
     req(values$selected_resident)
-    find_record_id(app_data(), values$selected_resident$name)
+    as.character(find_record_id(app_data(), values$selected_resident$name))
   })
 
   # ============================================================================
@@ -1602,9 +1602,15 @@ server <- function(input, output, session) {
   eval_module_data <- reactive({
     raw <- app_data()$raw_eval_data
     if (is.null(raw) || !is.data.frame(raw)) return(NULL)
-    if (!"redcap_repeat_instrument" %in% names(raw)) {
+    # gmed modules require redcap_repeat_instrument == "assessment" (case-insensitive match)
+    if (!"redcap_repeat_instrument" %in% names(raw))
       raw$redcap_repeat_instrument <- "Assessment"
-    }
+    # gmed plus_delta select() requires redcap_repeat_instance
+    if (!"redcap_repeat_instance" %in% names(raw))
+      raw$redcap_repeat_instance <- seq_len(nrow(raw))
+    # coerce record_id to character so dplyr filter matches correctly
+    if ("record_id" %in% names(raw))
+      raw$record_id <- as.character(raw$record_id)
     raw
   })
 
@@ -1633,6 +1639,8 @@ server <- function(input, output, session) {
 
   output$prev_ccc_ilp_note <- renderUI({
     req(values$selected_resident)
+    req(isTRUE(input$ccc_rev_type == "1"))
+    req(isTRUE(nzchar(input$ccc_session %||% "")))
 
     ccc_review_data <- app_data()$ccc_review
     if (is.null(ccc_review_data) || !is.data.frame(ccc_review_data)) {
@@ -1845,104 +1853,84 @@ server <- function(input, output, session) {
     message("Rendering milestone interface - milestones available: ", milestones_available)
     
     if (milestones_available) {
-      # EXISTING MILESTONES WORKFLOW
+      # EXISTING MILESTONES WORKFLOW — always show module for direct editing
       tagList(
+        fluidRow(
+          column(6,
+            radioButtons(
+              "ccc_mile",
+              "Are the milestones complete and acceptable?",
+              choices = c("No — Edit below" = "0", "Yes — Acceptable" = "1"),
+              selected = character(0)
+            )
+          ),
+          column(6,
+            conditionalPanel(
+              condition = "input.ccc_mile == '0'",
+              textAreaInput(
+                "ccc_mile_concerns",
+                "Notes on changes (required when editing):",
+                rows = 2,
+                placeholder = "Briefly explain what you changed and why..."
+              )
+            )
+          )
+        ),
+        hr(),
         div(
-          class = "alert alert-success mb-3",
-          icon("check-circle", class = "me-2"),
-          tags$strong("Milestones Available:"),
-          " Program milestone assessments found for this period."
+          class = "alert alert-info mb-2 py-2",
+          icon("hand-pointer", class = "me-2"),
+          tags$strong("Select each milestone"), " and adjust the level using the controls below."
         ),
-        
-        radioButtons(
-          "ccc_mile",
-          "Are the milestones complete and acceptable?",
-          choices = c(
-            "No - Need to edit" = "0",
-            "Yes - Acceptable" = "1"
-          ),
-          selected = character(0)
-        ),
-        
-        # Show editing interface when milestones are not acceptable
-        conditionalPanel(
-          condition = "input.ccc_mile == '0'",
-          hr(),
-          div(
-            class = "alert alert-warning mb-3",
-            icon("edit", class = "me-2"),
-            tags$strong("Edit Required:"),
-            " Please modify the milestone assessments below."
-          ),
-          
-          # Comments for edits
-          textAreaInput(
-            "ccc_mile_concerns", 
-            "Comments about milestone changes:",
-            rows = 3,
-            placeholder = "Explain what milestone changes you made and why..."
-          ),
-          
-          # Enhanced milestone editing module
-          mod_ccc_miles_ui("ccc_miles")
-        )
+        mod_ccc_miles_ui("ccc_miles")
       )
       
     } else {
       # NO EXISTING MILESTONES WORKFLOW
       tagList(
         div(
-          class = "alert alert-warning mb-3",
+          class = "alert alert-warning mb-3 py-2",
           icon("exclamation-triangle", class = "me-2"),
-          tags$strong("No Milestones Found:"),
-          " No program milestone assessments found for this period."
+          tags$strong("No prior milestones for this period."),
+          " Use the interface below to enter an assessment now, or choose to skip."
         ),
-        
-        radioButtons(
-          "ccc_enter_milestones",
-          "Do you want to enter milestone assessments now?",
-          choices = c(
-            "No - Proceed without milestones" = "0",
-            "Yes - Enter milestone assessments" = "1"
+        fluidRow(
+          column(6,
+            radioButtons(
+              "ccc_enter_milestones",
+              "Enter milestone assessments now?",
+              choices = c("Skip — proceed without" = "0", "Yes — enter now" = "1"),
+              selected = character(0)
+            )
           ),
-          selected = character(0)
+          column(6,
+            conditionalPanel(
+              condition = "input.ccc_enter_milestones == '1'",
+              textAreaInput(
+                "ccc_mile_concerns",
+                "Assessment notes:",
+                rows = 2,
+                placeholder = "Rationale for your milestone ratings..."
+              )
+            )
+          )
         ),
-        
-        # Show milestone entry interface when user selects Yes
         conditionalPanel(
           condition = "input.ccc_enter_milestones == '1'",
           hr(),
           div(
-            class = "alert alert-info mb-3",
-            icon("plus-circle", class = "me-2"),
-            tags$strong("Milestone Entry Mode:"),
-            " Please assess the relevant milestones below."
+            class = "alert alert-info mb-2 py-2",
+            icon("hand-pointer", class = "me-2"),
+            tags$strong("Select each milestone"), " and set the appropriate level."
           ),
-          
-          # Comments for new entry
-          textAreaInput(
-            "ccc_mile_concerns", 
-            "Comments about milestone assessment:",
-            rows = 3,
-            placeholder = "Explain your milestone assessment rationale..."
-          ),
-          
-          # Milestone entry module (same module, different context)
-          div(
-            class = "milestone-entry-container",
-            style = "border: 2px solid #28a745; border-radius: 8px; padding: 15px; background-color: #f8fff9;",
-            h6("Enter Milestone Assessments", class = "text-success mb-3"),
-            mod_ccc_miles_ui("ccc_miles")
-          )
+          mod_ccc_miles_ui("ccc_miles")
         ),
-        
-        # Show status when user selects No
         conditionalPanel(
           condition = "input.ccc_enter_milestones == '0'",
           div(
-            class = "alert alert-info mt-3",
+            class = "alert alert-secondary mt-2 py-2",
             icon("info-circle", class = "me-2"),
-            "CCC review will proceed without milestone assessment."
+            "Review will proceed without milestone assessment."
           )
         )
       )

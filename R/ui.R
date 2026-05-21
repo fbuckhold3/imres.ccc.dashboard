@@ -13,9 +13,43 @@ ui <- page_fluid(
   
   # Enable shinyjs
   useShinyjs(),
-  
+
   # Load CSS from separate file
   includeCSS("www/styles.css"),
+
+  # JS: visual selection state for radio buttons and checkboxes
+  tags$script(HTML("
+    $(document).ready(function() {
+
+      // --- Radio button highlight ---
+      function syncRadioState(container) {
+        container.find('.radio').removeClass('shiny-selected');
+        container.find('input[type=radio]:checked').closest('.radio').addClass('shiny-selected');
+      }
+      $(document).on('change', 'input[type=radio]', function() {
+        syncRadioState($(this).closest('.shiny-input-container'));
+      });
+      // Init on load and whenever Shiny re-renders
+      $(document).on('shiny:value shiny:inputchanged', function() {
+        $('.shiny-input-container').each(function() {
+          syncRadioState($(this));
+        });
+      });
+
+      // --- Checkbox highlight ---
+      function syncCheckboxState(cb) {
+        if (cb.prop('checked')) {
+          cb.closest('.checkbox').addClass('shiny-cb-selected');
+        } else {
+          cb.closest('.checkbox').removeClass('shiny-cb-selected');
+        }
+      }
+      $(document).on('change', 'input[type=checkbox]', function() {
+        syncCheckboxState($(this));
+      });
+
+    });
+  ")),
   
   # Enhanced JavaScript for opening resident dashboard with auto-filled access code
   tags$script(HTML("
@@ -467,37 +501,134 @@ ui <- page_fluid(
           )
         ),
         
+        # ── PERSISTENT REFERENCE PANEL (always visible during any review) ─────────
+        fluidRow(
+          column(12,
+            div(class = "ref-info-panel mb-3 p-3",
+              style = "background:#eef5ff; border-radius:10px; border:1px solid #b8d4ff;",
+              div(class = "d-flex flex-wrap align-items-center gap-2 mb-0",
+                span(class = "fw-bold text-primary me-1", "Quick Reference:"),
+                # ITE Nomogram — always accessible
+                tags$a(
+                  href = "https://019c6e98-bc22-40f0-d94c-ec16c5110b29.share.connect.posit.cloud",
+                  target = "_blank",
+                  class = "btn btn-info btn-sm px-3",
+                  icon("chart-line", class = "me-1"), "ITE Nomogram"
+                ),
+                # USMLE Step 3 status inline
+                uiOutput("step3_status_display"),
+                # Spacer
+                div(class = "flex-grow-1"),
+                # Evaluations toggle
+                tags$button(
+                  class = "btn btn-outline-primary btn-sm",
+                  type = "button",
+                  `data-bs-toggle` = "collapse",
+                  `data-bs-target` = "#refEvalCollapse",
+                  `aria-expanded` = "false",
+                  icon("clipboard-list", class = "me-1"), "Evaluations"
+                ),
+                # Plus/Delta toggle
+                tags$button(
+                  class = "btn btn-outline-success btn-sm",
+                  type = "button",
+                  `data-bs-toggle` = "collapse",
+                  `data-bs-target` = "#refPdCollapse",
+                  `aria-expanded` = "false",
+                  icon("comments", class = "me-1"), "Plus / Delta"
+                )
+              ),
+              # Evaluation table collapse
+              div(class = "collapse mt-2", id = "refEvalCollapse",
+                div(class = "border rounded p-2 bg-white",
+                  mod_eval_table_ui("ccc_eval_table"))
+              ),
+              # Plus/Delta table collapse
+              div(class = "collapse mt-2", id = "refPdCollapse",
+                div(class = "border rounded p-2 bg-white",
+                  mod_plus_delta_table_ui("ccc_plus_delta", title = NULL))
+              )
+            )
+          )
+        ),
+
         # STEP 1: Initial Review Setup (Always Visible)
         fluidRow(
           column(
             width = 12,
             card(
-              card_header("Step 1: Review Setup",
-                          `data-card-type` = "review-setup"
+              card_header(
+                div(class = "d-flex align-items-center",
+                    div(class = "step-badge me-2", "1"),
+                    "Review Setup"),
+                `data-card-type` = "review-setup"
               ),
               card_body(
                 fluidRow(
                   column(
                     width = 6,
-                    # Review Type
-                    radioButtons(
-                      "ccc_rev_type",
-                      "Review Type:",
-                      choices = c(
-                        "Scheduled Review" = "1",
-                        "Interim Review" = "2"
+                    div(
+                      class = "mb-2 fw-semibold text-secondary small text-uppercase",
+                      "Review Type"
+                    ),
+                    # Button-group style review type selector
+                    div(
+                      class = "btn-group-review d-flex gap-2",
+                      tags$label(
+                        class = "review-type-btn flex-fill text-center p-3 rounded border border-2",
+                        `data-value` = "1",
+                        style = "cursor:pointer; transition:all 0.2s;",
+                        icon("calendar-check", class = "d-block fa-2x mb-1 mx-auto"),
+                        div(class = "fw-bold", "Scheduled Review"),
+                        tags$small(class = "text-muted", "Semi-annual / annual"),
+                        tags$input(
+                          type = "radio", name = "ccc_rev_type_vis", value = "1",
+                          class = "d-none rev-type-radio", `data-shiny-id` = "ccc_rev_type"
+                        )
                       ),
-                      selected = character(0)
-                    )
+                      tags$label(
+                        class = "review-type-btn flex-fill text-center p-3 rounded border border-2",
+                        `data-value` = "2",
+                        style = "cursor:pointer; transition:all 0.2s;",
+                        icon("exclamation-circle", class = "d-block fa-2x mb-1 mx-auto text-warning"),
+                        div(class = "fw-bold", "Interim Review"),
+                        tags$small(class = "text-muted", "Concern / ad hoc"),
+                        tags$input(
+                          type = "radio", name = "ccc_rev_type_vis", value = "2",
+                          class = "d-none rev-type-radio", `data-shiny-id` = "ccc_rev_type"
+                        )
+                      )
+                    ),
+                    # Hidden Shiny input that the visual buttons drive
+                    div(class = "d-none",
+                      radioButtons("ccc_rev_type", label = NULL,
+                                   choices = c("1", "2"), selected = character(0))
+                    ),
+                    # JS bridge: visual button click → Shiny input
+                    tags$script(HTML("
+                      $(document).on('click', '.review-type-btn', function() {
+                        var val = $(this).data('value');
+                        // update visual state
+                        $('.review-type-btn').removeClass('selected-review-btn');
+                        $(this).addClass('selected-review-btn');
+                        // drive the hidden Shiny radio
+                        var radio = $('input[name=ccc_rev_type][value=\"' + val + '\"]');
+                        radio.prop('checked', true).trigger('change');
+                      });
+                    "))
                   ),
                   column(
                     width = 6,
                     # Session (only for scheduled reviews)
                     conditionalPanel(
                       condition = "input.ccc_rev_type == '1'",
+                      div(
+                        class = "mb-2 fw-semibold text-secondary small text-uppercase",
+                        "Review Session"
+                      ),
                       selectInput(
                         "ccc_session",
-                        "Review Session:",
+                        label = NULL,
                         choices = c(
                           "Select session..." = "",
                           "Mid Intern" = "1",
@@ -508,7 +639,8 @@ ui <- page_fluid(
                           "Graduation" = "6",
                           "Intern Intro" = "7"
                         ),
-                        selected = ""
+                        selected = "",
+                        width = "100%"
                       )
                     )
                   )
@@ -517,7 +649,7 @@ ui <- page_fluid(
             )
           )
         ),
-        
+
         br(),
         
         div(
@@ -802,69 +934,6 @@ ui <- page_fluid(
                           )
                         ),
                         
-                        # ── EVALUATIONS TABLE (collapsible) ───────────────────
-                        div(
-                          class = "mb-4",
-                          # Prominent header button
-                          tags$button(
-                            class = "btn btn-outline-primary btn-lg w-100 d-flex align-items-center justify-content-between",
-                            type = "button",
-                            `data-bs-toggle` = "collapse",
-                            `data-bs-target` = "#evalTableCollapse",
-                            `aria-expanded` = "false",
-                            style = "border-radius: 10px; font-weight: 600;",
-                            div(
-                              class = "d-flex align-items-center",
-                              icon("clipboard-list", class = "fa-lg me-2"),
-                              span("Faculty Evaluations", class = "fs-5")
-                            ),
-                            div(
-                              tags$small("Click to expand", class = "text-muted me-2"),
-                              icon("chevron-down")
-                            )
-                          ),
-                          div(
-                            class = "collapse mt-2",
-                            id = "evalTableCollapse",
-                            div(
-                              class = "card card-body p-3",
-                              style = "border: 2px solid #0d6efd; border-radius: 10px;",
-                              mod_eval_table_ui("ccc_eval_table")
-                            )
-                          )
-                        ),
-
-                        # ── PLUS/DELTA TABLE (prominent) ─────────────────────
-                        div(
-                          class = "mb-4",
-                          tags$button(
-                            class = "btn btn-success btn-lg w-100 d-flex align-items-center justify-content-between",
-                            type = "button",
-                            `data-bs-toggle` = "collapse",
-                            `data-bs-target` = "#plusDeltaCollapse",
-                            `aria-expanded` = "false",
-                            style = "border-radius: 10px; font-weight: 600;",
-                            div(
-                              class = "d-flex align-items-center",
-                              icon("plus-minus", class = "fa-lg me-2"),
-                              span("Plus / Delta Feedback", class = "fs-5")
-                            ),
-                            div(
-                              tags$small("Strengths & growth areas", class = "text-light me-2"),
-                              icon("chevron-down")
-                            )
-                          ),
-                          div(
-                            class = "collapse mt-2",
-                            id = "plusDeltaCollapse",
-                            div(
-                              class = "card card-body p-3",
-                              style = "border: 2px solid #198754; border-radius: 10px;",
-                              mod_plus_delta_table_ui("ccc_plus_delta", title = NULL)
-                            )
-                          )
-                        ),
-
                         # Enhanced CCC Comments on ILP
                         div(
                           class = "ccc-comments-section mb-4 p-4",
@@ -1112,31 +1181,6 @@ ui <- page_fluid(
           id = "milestone-review-section",
           style = "display: none;",
           
-          # ITE Nomogram + Step 3 Status bar
-          fluidRow(
-            column(
-              width = 12,
-              div(
-                class = "d-flex flex-wrap gap-3 mb-3 p-3",
-                style = "background: #f8f9fa; border-radius: 10px; border: 1px solid #dee2e6;",
-                # ITE Nomogram button
-                tags$a(
-                  href = "https://019c6e98-bc22-40f0-d94c-ec16c5110b29.share.connect.posit.cloud",
-                  target = "_blank",
-                  class = "btn btn-info btn-lg px-4",
-                  style = "border-radius: 8px; font-weight: 600;",
-                  icon("chart-line", class = "me-2"),
-                  "ITE Nomogram"
-                ),
-                # Step 3 Status
-                div(
-                  class = "flex-grow-1",
-                  uiOutput("step3_status_display")
-                )
-              )
-            )
-          ),
-
           # Milestone Plots Section
           fluidRow(
             column(
