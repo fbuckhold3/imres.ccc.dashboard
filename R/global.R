@@ -174,10 +174,10 @@ load_imres_data <- function(config) {
   rdm_dat <- tryCatch({
     message("Pulling forms data...")
     # FIXED: Added milestone forms to the pull
-    result <- forms_api_pull(config$rdm_token, config$url, 
-                             'resident_data', 'faculty_evaluation', 'ilp', 's_eval', 'scholarship', 
+    result <- forms_api_pull(config$rdm_token, config$url,
+                             'resident_data', 'faculty_evaluation', 'ilp', 's_eval', 'scholarship',
                              'ccc_review', 'coach_rev', 'second_review',
-                             'milestone_entry', 'milestone_selfevaluation_c33c')
+                             'milestone_entry', 'milestone_selfevaluation_c33c', 'test_data')
     
     message("Forms data pulled. Structure of rdm_dat:")
     message("rdm_dat is of class: ", paste(class(result), collapse=", "))
@@ -775,20 +775,31 @@ load_imres_data <- function(config) {
     }
   }
   
+  # Extract test_data (ITE scores) from rdm_dat
+  test_data_df <- tryCatch({
+    if (!is.null(rdm_dat) && "test_data" %in% names(rdm_dat)) {
+      rdm_dat$test_data
+    } else if (is.data.frame(rdm_dat) && "redcap_repeat_instrument" %in% names(rdm_dat)) {
+      rows <- rdm_dat[tolower(trimws(rdm_dat$redcap_repeat_instrument)) == "test_data", ]
+      if (nrow(rows) > 0) rows else NULL
+    } else NULL
+  }, error = function(e) NULL)
+
   result_list <- list(
     rdm_dict = rdm_dict,
     ass_dict = ass_dict,
     resident_data = resident_data,
     raw_eval_data = raw_eval_data,               # Raw assessment data for eval/plus-delta modules
-    raw_rdm_data = if (is.data.frame(rdm_dat)) rdm_dat else NULL,  # Flat RDM data if available
+    raw_rdm_data = if (is.data.frame(rdm_dat)) rdm_dat else NULL,
+    test_data = test_data_df,                    # ITE / test scores for board predictor module
     miles = miles,
     ilp = ilp_data,
     s_eval = s_eval_data,
     schol_data = schol_data,
-    p_miles = p_miles,                          # CLEAN milestone data for plots (no _desc fields)
-    s_miles = s_miles,                          # CLEAN milestone data for plots (no _desc fields)
-    p_miles_descriptions = p_miles_descriptions, # Milestone data WITH descriptions for tables
-    s_miles_descriptions = s_miles_descriptions, # Milestone data WITH descriptions for tables
+    p_miles = p_miles,
+    s_miles = s_miles,
+    p_miles_descriptions = p_miles_descriptions,
+    s_miles_descriptions = s_miles_descriptions,
     ccc_review = ccc_review_data,
     url = config$url,
     eval_token = config$eval_token,
@@ -805,26 +816,27 @@ load_imres_data <- function(config) {
 }
 
 # ---------- GLOBAL APP DATA MANAGEMENT ----------
-# Define a variable to hold app data
-app_data_store <- NULL
+# Pre-load ALL data at process startup so every user session sees data immediately.
+# This runs once when the R worker starts (global.R is sourced before server.R).
+message("=== PRE-LOADING APP DATA AT STARTUP ===")
+app_data_store <- tryCatch({
+  cfg <- initialize_app_config()
+  load_imres_data(cfg)
+}, error = function(e) {
+  message("ERROR during startup pre-load: ", e$message)
+  NULL
+})
+message("=== STARTUP PRE-LOAD COMPLETE. Keys: ",
+        paste(names(app_data_store), collapse = ", "), " ===")
 
-# Updated ensure_data_loaded function with tryCatch for s_eval enhancement
+# ensure_data_loaded kept for backward compatibility — just returns the store
 ensure_data_loaded <- function() {
   if (is.null(app_data_store)) {
-    # Only initialize data when needed
-    message("Starting data load process...")
-    config <- initialize_app_config()
-    message("Config initialized")
-    app_data_store <<- load_imres_data(config)
-    message("Data loaded")
-    
-    # Remove the enhanced s_eval extraction section completely
-    # The filters will handle this dynamically when needed
-    
-    # Add final check after data is loaded
-    message("FINAL CHECK: app_data_store contains these keys:", paste(names(app_data_store), collapse=", "))
+    message("WARNING: app_data_store is NULL — re-loading...")
+    cfg <- initialize_app_config()
+    app_data_store <<- load_imres_data(cfg)
   }
-  return(app_data_store)
+  app_data_store
 }
 
 # Add this to your global.R file after your existing setup

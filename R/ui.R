@@ -536,6 +536,15 @@ ui <- page_fluid(
                   `data-bs-target` = "#refPdCollapse",
                   `aria-expanded` = "false",
                   icon("comments", class = "me-1"), "Plus / Delta"
+                ),
+                # Board Predictor toggle
+                tags$button(
+                  class = "btn btn-outline-warning btn-sm",
+                  type = "button",
+                  `data-bs-toggle` = "collapse",
+                  `data-bs-target` = "#refBoardsCollapse",
+                  `aria-expanded` = "false",
+                  icon("graduation-cap", class = "me-1"), "Board Predictor"
                 )
               ),
               # Evaluation table collapse
@@ -547,6 +556,11 @@ ui <- page_fluid(
               div(class = "collapse mt-2", id = "refPdCollapse",
                 div(class = "border rounded p-2 bg-white",
                   mod_plus_delta_table_ui("ccc_plus_delta", title = NULL))
+              ),
+              # Board Predictor collapse
+              div(class = "collapse mt-2", id = "refBoardsCollapse",
+                div(class = "border rounded p-2 bg-white",
+                  mod_seval_boards_display_ui("ccc_boards"))
               )
             )
           )
@@ -567,75 +581,30 @@ ui <- page_fluid(
                 fluidRow(
                   column(
                     width = 6,
-                    div(
-                      class = "mb-2 fw-semibold text-secondary small text-uppercase",
-                      "Review Type"
-                    ),
-                    # Button-group style review type selector
-                    div(
-                      class = "btn-group-review d-flex gap-2",
-                      tags$label(
-                        class = "review-type-btn flex-fill text-center p-3 rounded border border-2",
-                        `data-value` = "1",
-                        style = "cursor:pointer; transition:all 0.2s;",
-                        icon("calendar-check", class = "d-block fa-2x mb-1 mx-auto"),
-                        div(class = "fw-bold", "Scheduled Review"),
-                        tags$small(class = "text-muted", "Semi-annual / annual"),
-                        tags$input(
-                          type = "radio", name = "ccc_rev_type_vis", value = "1",
-                          class = "d-none rev-type-radio", `data-shiny-id` = "ccc_rev_type"
-                        )
+                    radioButtons(
+                      "ccc_rev_type",
+                      "Review Type:",
+                      choices = c(
+                        "Scheduled Review" = "1",
+                        "Interim Review"   = "2"
                       ),
-                      tags$label(
-                        class = "review-type-btn flex-fill text-center p-3 rounded border border-2",
-                        `data-value` = "2",
-                        style = "cursor:pointer; transition:all 0.2s;",
-                        icon("exclamation-circle", class = "d-block fa-2x mb-1 mx-auto text-warning"),
-                        div(class = "fw-bold", "Interim Review"),
-                        tags$small(class = "text-muted", "Concern / ad hoc"),
-                        tags$input(
-                          type = "radio", name = "ccc_rev_type_vis", value = "2",
-                          class = "d-none rev-type-radio", `data-shiny-id` = "ccc_rev_type"
-                        )
-                      )
-                    ),
-                    # Hidden Shiny input that the visual buttons drive
-                    div(class = "d-none",
-                      radioButtons("ccc_rev_type", label = NULL,
-                                   choices = c("1", "2"), selected = character(0))
-                    ),
-                    # JS bridge: visual button click → Shiny input
-                    tags$script(HTML("
-                      $(document).on('click', '.review-type-btn', function() {
-                        var val = $(this).data('value');
-                        // update visual state
-                        $('.review-type-btn').removeClass('selected-review-btn');
-                        $(this).addClass('selected-review-btn');
-                        // drive the hidden Shiny radio
-                        var radio = $('input[name=ccc_rev_type][value=\"' + val + '\"]');
-                        radio.prop('checked', true).trigger('change');
-                      });
-                    "))
+                      selected = character(0)
+                    )
                   ),
                   column(
                     width = 6,
-                    # Session (only for scheduled reviews)
                     conditionalPanel(
                       condition = "input.ccc_rev_type == '1'",
-                      div(
-                        class = "mb-2 fw-semibold text-secondary small text-uppercase",
-                        "Review Session"
-                      ),
                       selectInput(
                         "ccc_session",
-                        label = NULL,
+                        "Review Session:",
                         choices = c(
                           "Select session..." = "",
-                          "Mid Intern" = "1",
-                          "End Intern" = "2",
-                          "Mid PGY2" = "3",
-                          "End PGY2" = "4",
-                          "Mid PGY3" = "5",
+                          "Mid Intern"  = "1",
+                          "End Intern"  = "2",
+                          "Mid PGY2"   = "3",
+                          "End PGY2"   = "4",
+                          "Mid PGY3"   = "5",
                           "Graduation" = "6",
                           "Intern Intro" = "7"
                         ),

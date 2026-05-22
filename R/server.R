@@ -21,18 +21,10 @@ server <- function(input, output, session) {
     submission_summary = NULL  # Holds summary data after successful CCC submission
   )
   
-  # Show loading notification
-  showNotification("Loading data... please wait", type = "message", duration = NULL, id = "loading")
-  
-  # Load app data reactively
-  app_data <- reactive({
-    data <- ensure_data_loaded()
-    
-    # Remove loading notification once data is loaded
-    removeNotification("loading")
-    
-    return(data)
-  })
+  # Data was pre-loaded in global.R at process startup.
+  # app_data() is a simple pass-through — no API calls, no delay.
+  removeNotification("loading")   # clear any stale notification from a previous run
+  app_data <- reactive({ app_data_store })
   
   # Setup milestone images
   setup_milestone_images <- function() {
@@ -1631,6 +1623,53 @@ server <- function(input, output, session) {
       req(values$selected_resident)
       selected_record_id()
     })
+  )
+
+  # ── Board predictor (ITE nomogram + ABIM pass probability) ───────────────
+  # current_s_eval: 1-row slice of s_eval for the selected resident + period
+  ccc_current_s_eval <- reactive({
+    req(values$selected_resident)
+    s <- app_data()$s_eval
+    if (is.null(s) || !is.data.frame(s)) return(NULL)
+    rec <- tryCatch(selected_record_id(), error = function(e) NULL)
+    if (is.null(rec)) return(NULL)
+    rows <- s[as.character(s$record_id) == rec, ]
+    # Return most-recent row
+    if (nrow(rows) == 0) return(NULL)
+    rows[nrow(rows), , drop = FALSE]
+  })
+
+  ccc_resident_info <- reactive({
+    req(values$selected_resident)
+    rd <- app_data()$resident_data
+    if (is.null(rd) || !is.data.frame(rd)) return(NULL)
+    rows <- rd[rd$name == values$selected_resident$name, ]
+    if (nrow(rows) == 0) return(NULL)
+    rows[1, , drop = FALSE]
+  })
+
+  ccc_test_data <- reactive({
+    req(values$selected_resident)
+    td <- app_data()$test_data
+    if (is.null(td) || !is.data.frame(td)) return(NULL)
+    rec <- tryCatch(selected_record_id(), error = function(e) NULL)
+    if (is.null(rec)) return(NULL)
+    td[as.character(td$record_id) == rec, ]
+  })
+
+  ccc_pgy <- reactive({
+    req(values$selected_resident)
+    lvl <- values$selected_resident$Level %||% ""
+    as.integer(gsub("[^0-9]", "", lvl) %>% { if (nzchar(.)) . else "1" })
+  })
+
+  mod_seval_boards_display_server(
+    id           = "ccc_boards",
+    current_s_eval = ccc_current_s_eval,
+    resident_info  = ccc_resident_info,
+    test_data      = ccc_test_data,
+    pgy            = ccc_pgy,
+    data_dict      = reactive({ app_data()$rdm_dict })
   )
 
   # ============================================================================
