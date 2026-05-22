@@ -1590,19 +1590,26 @@ server <- function(input, output, session) {
   # GMED MODULE INTEGRATIONS (Eval Table + Plus/Delta Table)
   # ============================================================================
 
-  # Reactive wrapper for eval data compatible with gmed modules
+  # Reactive wrapper for eval data compatible with gmed modules.
+  # IMPORTANT: Prefer rdm_assessment (record_ids from RDM project match find_record_id()).
+  # Fallback to raw_eval_data (eval project has different record_ids — modules show empty).
   eval_module_data <- reactive({
+    # Primary: RDM project assessment form (correct record_ids)
+    rdm_ass <- app_data()$rdm_assessment
+    if (!is.null(rdm_ass) && is.data.frame(rdm_ass) && nrow(rdm_ass) > 0) {
+      message("eval_module_data: using rdm_assessment (", nrow(rdm_ass), " rows)")
+      return(rdm_ass)
+    }
+    # Fallback: eval project data (record_ids may not match RDM)
     raw <- app_data()$raw_eval_data
     if (is.null(raw) || !is.data.frame(raw)) return(NULL)
-    # gmed modules require redcap_repeat_instrument == "assessment" (case-insensitive match)
     if (!"redcap_repeat_instrument" %in% names(raw))
       raw$redcap_repeat_instrument <- "Assessment"
-    # gmed plus_delta select() requires redcap_repeat_instance
     if (!"redcap_repeat_instance" %in% names(raw))
       raw$redcap_repeat_instance <- seq_len(nrow(raw))
-    # coerce record_id to character so dplyr filter matches correctly
     if ("record_id" %in% names(raw))
       raw$record_id <- as.character(raw$record_id)
+    message("eval_module_data: falling back to raw_eval_data (", nrow(raw), " rows)")
     raw
   })
 
@@ -1788,6 +1795,156 @@ server <- function(input, output, session) {
     # No step 3 data found
     div(class = "text-muted small fst-italic",
         icon("info-circle", class = "me-1"), "Step 3 data not available")
+  })
+
+  # ============================================================================
+  # CURRENT ILP GOALS DISPLAY (toggle inside review form)
+  # ============================================================================
+
+  output$current_ilp_display <- renderUI({
+    req(values$selected_resident)
+
+    ilp_data <- app_data()$ilp
+    if (is.null(ilp_data) || !is.data.frame(ilp_data)) {
+      return(div(class = "text-muted fst-italic small py-2",
+                 icon("info-circle", class = "me-1"), "No ILP data available."))
+    }
+
+    rec_id <- tryCatch(selected_record_id(), error = function(e) NULL)
+    if (is.null(rec_id)) {
+      return(div(class = "text-muted fst-italic small py-2",
+                 "Could not resolve resident record ID."))
+    }
+
+    res_ilp <- ilp_data[as.character(ilp_data$record_id) == rec_id, ]
+    if (nrow(res_ilp) == 0) {
+      return(div(class = "text-muted fst-italic small py-2",
+                 icon("info-circle", class = "me-1"), "No ILP entries found for this resident."))
+    }
+
+    # Most recent entry first
+    if ("redcap_repeat_instance" %in% names(res_ilp)) {
+      res_ilp <- res_ilp[order(suppressWarnings(as.integer(res_ilp$redcap_repeat_instance)),
+                                decreasing = TRUE), ]
+    }
+    row <- res_ilp[1, ]
+
+    # Build goal cards
+    goals <- list(
+      "PC / MK" = list(
+        comp   = if ("ilp_pcmk" %in% names(row) && !is.na(row$ilp_pcmk)) row$ilp_pcmk else NULL,
+        target = if ("ilp_pcmk_target" %in% names(row) && !is.na(row$ilp_pcmk_target)) row$ilp_pcmk_target else NULL,
+        text   = if ("ilp_pcmk_mile_text" %in% names(row) && !is.na(row$ilp_pcmk_mile_text)) row$ilp_pcmk_mile_text else NULL,
+        how    = if ("ilp_pcmk_how" %in% names(row) && !is.na(row$ilp_pcmk_how)) row$ilp_pcmk_how else NULL
+      ),
+      "SBP / PBLI" = list(
+        comp   = if ("ilp_sbp_pbli" %in% names(row) && !is.na(row$ilp_sbp_pbli)) row$ilp_sbp_pbli else NULL,
+        target = if ("ilp_sbp_pbli_target" %in% names(row) && !is.na(row$ilp_sbp_pbli_target)) row$ilp_sbp_pbli_target else NULL,
+        text   = if ("ilp_sbp_pbli_mile_text" %in% names(row) && !is.na(row$ilp_sbp_pbli_mile_text)) row$ilp_sbp_pbli_mile_text else NULL,
+        how    = if ("ilp_sbp_pbli_how" %in% names(row) && !is.na(row$ilp_sbp_pbli_how)) row$ilp_sbp_pbli_how else NULL
+      ),
+      "PROF / ICS" = list(
+        comp   = if ("ilp_prof_ics" %in% names(row) && !is.na(row$ilp_prof_ics)) row$ilp_prof_ics else NULL,
+        target = if ("ilp_prof_ics_target" %in% names(row) && !is.na(row$ilp_prof_ics_target)) row$ilp_prof_ics_target else NULL,
+        text   = if ("ilp_prof_ics_mile_text" %in% names(row) && !is.na(row$ilp_prof_ics_mile_text)) row$ilp_prof_ics_mile_text else NULL,
+        how    = if ("ilp_prof_ics_how" %in% names(row) && !is.na(row$ilp_prof_ics_how)) row$ilp_prof_ics_how else NULL
+      )
+    )
+
+    has_any <- any(sapply(goals, function(g) !is.null(g$comp) || !is.null(g$text) || !is.null(g$how)))
+    if (!has_any) {
+      return(div(class = "text-muted fst-italic small py-2",
+                 icon("info-circle", class = "me-1"), "ILP goals not yet entered for this period."))
+    }
+
+    goal_cards <- lapply(seq_along(goals), function(i) {
+      nm <- names(goals)[i]
+      g  <- goals[[i]]
+      if (is.null(g$comp) && is.null(g$text) && is.null(g$how)) return(NULL)
+      colors <- c("#2c7be5", "#27ae60", "#9b59b6")
+      column(4,
+        div(
+          class = "h-100 p-2 rounded border",
+          style = paste0("border-left: 4px solid ", colors[i], " !important;"),
+          tags$strong(nm, style = paste0("color:", colors[i])),
+          if (!is.null(g$comp))   div(class = "small mt-1", tags$b("Area: "), g$comp),
+          if (!is.null(g$target)) div(class = "small", tags$b("Target: "), g$target),
+          if (!is.null(g$text) && nzchar(trimws(g$text)))
+            div(class = "small", tags$b("Goal: "), g$text),
+          if (!is.null(g$how) && nzchar(trimws(g$how)))
+            div(class = "small text-muted", tags$b("Plan: "), g$how)
+        )
+      )
+    })
+    goal_cards <- Filter(Negate(is.null), goal_cards)
+
+    tagList(
+      tags$small(class = "text-muted d-block mb-2",
+                 icon("info-circle", class = "me-1"),
+                 "Most recent ILP submission (instance ", row$redcap_repeat_instance %||% "?", ")"),
+      fluidRow(goal_cards)
+    )
+  })
+
+  # ============================================================================
+  # MILESTONE PROGRESSION PLOT (historical view, all periods)
+  # ============================================================================
+
+  output$milestone_progression_plot <- renderPlot({
+    req(values$selected_resident)
+
+    data     <- app_data()
+    p_miles  <- data$p_miles
+    s_miles  <- data$s_miles
+    res_name <- values$selected_resident$name
+
+    mile_cols <- c("PC1","PC2","PC3","PC4","PC5","PC6",
+                   "MK1","MK2","MK3",
+                   "SBP1","SBP2","SBP3",
+                   "PBL1","PBL2",
+                   "PROF1","PROF2","PROF3","PROF4",
+                   "ICS1","ICS2","ICS3")
+
+    build_progress <- function(df, label) {
+      if (is.null(df)) return(NULL)
+      res <- df[df$name == res_name, ]
+      if (nrow(res) == 0) return(NULL)
+      cols_avail <- intersect(mile_cols, names(res))
+      if (length(cols_avail) == 0) return(NULL)
+      res %>%
+        dplyr::select(period, dplyr::all_of(cols_avail)) %>%
+        dplyr::mutate(dplyr::across(dplyr::all_of(cols_avail), as.numeric)) %>%
+        dplyr::mutate(mean_score = rowMeans(dplyr::select(., dplyr::all_of(cols_avail)), na.rm = TRUE),
+                      type = label) %>%
+        dplyr::select(period, mean_score, type) %>%
+        dplyr::arrange(period)
+    }
+
+    prog_p <- build_progress(p_miles, "Program")
+    prog_s <- build_progress(s_miles, "Self")
+
+    combined <- dplyr::bind_rows(prog_p, prog_s)
+    if (is.null(combined) || nrow(combined) == 0) {
+      ggplot() +
+        annotate("text", x = .5, y = .5, label = "No milestone history available",
+                 color = "darkgray", size = 5) +
+        theme_void()
+    } else {
+      ggplot(combined, aes(x = period, y = mean_score, color = type, group = type)) +
+        geom_line(size = 1.1) +
+        geom_point(size = 3) +
+        ggplot2::geom_label(aes(label = round(mean_score, 1)),
+                            vjust = -0.6, size = 3, show.legend = FALSE) +
+        scale_color_manual(values = c("Program" = "#27ae60", "Self" = "#2c7be5"),
+                           name = NULL) +
+        scale_y_continuous(limits = c(0, 9), breaks = 0:9) +
+        labs(title   = paste("Milestone Progression —", res_name),
+             x = "Period", y = "Mean Score (0–9)") +
+        theme_minimal(base_size = 12) +
+        theme(axis.text.x    = element_text(angle = 45, hjust = 1, size = 9),
+              legend.position = "top",
+              plot.title      = element_text(face = "bold", size = 12))
+    }
   })
 
   # ============================================================================

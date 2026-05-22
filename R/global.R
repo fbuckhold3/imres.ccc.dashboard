@@ -177,7 +177,8 @@ load_imres_data <- function(config) {
     result <- forms_api_pull(config$rdm_token, config$url,
                              'resident_data', 'faculty_evaluation', 'ilp', 's_eval', 'scholarship',
                              'ccc_review', 'coach_rev', 'second_review',
-                             'milestone_entry', 'milestone_selfevaluation_c33c', 'test_data')
+                             'milestone_entry', 'milestone_selfevaluation_c33c', 'test_data',
+                             'assessment')
     
     message("Forms data pulled. Structure of rdm_dat:")
     message("rdm_dat is of class: ", paste(class(result), collapse=", "))
@@ -785,11 +786,46 @@ load_imres_data <- function(config) {
     } else NULL
   }, error = function(e) NULL)
 
+  # ---------- RDM ASSESSMENT DATA (correct record_ids for gmed modules) ----------
+  # Pull the 'assessment' form from the RDM project. record_id here matches the
+  # RDM project's IDs (same as find_record_id()), so gmed module filters work.
+  rdm_assessment_df <- tryCatch({
+    if (!is.null(rdm_dat) && "assessment" %in% names(rdm_dat)) {
+      dat <- rdm_dat$assessment
+      message("RDM assessment form found: ", nrow(dat), " rows")
+      if (is.data.frame(dat) && nrow(dat) > 0) {
+        # Ensure gmed-required columns are present
+        if (!"redcap_repeat_instrument" %in% names(dat))
+          dat$redcap_repeat_instrument <- "Assessment"
+        else
+          dat$redcap_repeat_instrument <- ifelse(
+            is.na(dat$redcap_repeat_instrument) | dat$redcap_repeat_instrument == "",
+            "Assessment",
+            dat$redcap_repeat_instrument
+          )
+        if (!"redcap_repeat_instance" %in% names(dat))
+          dat$redcap_repeat_instance <- seq_len(nrow(dat))
+        dat$record_id <- as.character(dat$record_id)
+        dat
+      } else {
+        message("RDM assessment form is empty")
+        NULL
+      }
+    } else {
+      message("No 'assessment' form in rdm_dat — gmed eval/plus-delta modules will fall back to eval_token data")
+      NULL
+    }
+  }, error = function(e) {
+    message("Error extracting RDM assessment data: ", e$message)
+    NULL
+  })
+
   result_list <- list(
     rdm_dict = rdm_dict,
     ass_dict = ass_dict,
     resident_data = resident_data,
-    raw_eval_data = raw_eval_data,               # Raw assessment data for eval/plus-delta modules
+    raw_eval_data = raw_eval_data,               # Raw assessment data from eval project (fallback)
+    rdm_assessment = rdm_assessment_df,          # Assessment data from RDM project (correct record_ids for gmed)
     raw_rdm_data = if (is.data.frame(rdm_dat)) rdm_dat else NULL,
     test_data = test_data_df,                    # ITE / test scores for board predictor module
     miles = miles,
